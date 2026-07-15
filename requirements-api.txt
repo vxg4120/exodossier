@@ -1,0 +1,11 @@
+# Stage 1 public surface (read-only API + MCP server). Python 3.14 venv (.venv).
+# All wheels present on 3.14.5; installing these never upgrades the Wave-1/2 scientific pins.
+fastapi
+uvicorn[standard]
+httpx            # also required by starlette's TestClient in the API tests
+
+# MCP server (mcp/server.py). Pinned: mcp >= 1.15 pulls pyjwt[crypto] -> cryptography, whose
+# current sdist fails to build on Python 3.14 (no compatible wheel; Rust manifest parse error).
+# 1.14.1 is the newest release whose dependency set is wheels-only on 3.14 and still ships the
+# modern low-level Server API used by mcp/server.py.
+mcp==1.14.1
