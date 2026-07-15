@@ -173,11 +173,15 @@ def catalog_stats(db: psycopg.Connection) -> dict[str, Any]:
             "teff": count_numeric_conflicts(db, "teff"),
         }
 
+        # Last run per catalog endpoint. Scope to the catalog sources that populate the identity
+        # graph ('exofop', 'nea'); the same ledger also carries the Wave-2 per-target MAST fetches
+        # (source 'mast'), which are not part of this surface and would flood the response.
         cur.execute(
             """
             SELECT DISTINCT ON (source, endpoint)
                 source, endpoint, status, rows_ingested, bytes_downloaded, finished_at
             FROM ingest_run
+            WHERE source IN ('exofop', 'nea')
             ORDER BY source, endpoint, started_at DESC NULLS LAST
             """
         )
