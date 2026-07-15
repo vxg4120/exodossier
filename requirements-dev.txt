@@ -1,0 +1,11 @@
+# Wave 1 dependencies. Python 3.14 venv (astropy/psycopg/lightkurve wheels all present on 3.14.5).
+requests
+psycopg[binary]
+PyYAML
+astropy
+pytest
+responses
+ruff
+# lightkurve is a Wave 2 dependency (MAST light-curve download). Installed now to settle version
+# compatibility with the Wave 1 astropy/numpy pins; not imported by any Wave 1 code.
+lightkurve

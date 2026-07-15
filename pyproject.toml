@@ -1,0 +1,20 @@
+[project]
+name = "exodossier"
+version = "0.1.0"
+description = "The evidence-synthesis layer for exoplanet discovery: a provenance-tracked identity graph reconciling the catalogs (TIC/TOI/CTOI/KOI/EPIC/Gaia) that disagree about the same stars and planets."
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+# -W error: a warning is a failing test (SPEC / global rule).
+addopts = "-q -W error"
+markers = [
+    "db: test requires a reachable DATABASE_URL (the exo database)",
+]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP", "B"]
