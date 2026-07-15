@@ -1,0 +1,24 @@
+# Conflict-resolution precedence per attribute (config, not code).
+# "disagreements are data, not errors": the resolver picks the winner by this order and writes it
+# to the canonical star/candidate columns; every losing assertion stays queryable in
+# source_assertion. Order = highest precedence first. Tokens are the source_assertion.source
+# values used by identity/assertions.py.
+
+# --- candidate (planet) attributes ---
+# Confirmed-planet composite + per-publication planet params beat the candidate lists; among the
+# two TOI copies, the live ExoFOP list beats the Archive's slower TOI mirror.
+period_days:      [pscomppars, ps, koi, exofop_toi, nea_toi, exofop_ctoi]
+planet_radius_re: [pscomppars, ps, koi, exofop_toi, nea_toi, exofop_ctoi]
+depth_ppm:        [exofop_toi, nea_toi, koi, exofop_ctoi, ps, pscomppars]
+duration_hr:      [pscomppars, ps, koi, exofop_toi, nea_toi, exofop_ctoi]
+epoch_bjd:        [pscomppars, ps, koi, exofop_toi, nea_toi, exofop_ctoi]
+# Disposition: the confirmed sources win, then the TFOPWG working-group call, then KOI, then CTOI.
+disposition:      [pscomppars, ps, koi, exofop_toi, nea_toi, exofop_ctoi]
+
+# --- star (host) attributes ---
+# Gaia-informed composite/PS stellar params beat the TESS/Kepler pipeline stellar params.
+teff_k:      [pscomppars, ps, exofop_toi, nea_toi, koi]
+logg:        [pscomppars, ps, exofop_toi, nea_toi, koi]
+rstar_rsun:  [pscomppars, ps, exofop_toi, nea_toi, koi]
+vmag:        [pscomppars, ps]
+tmag:        [exofop_toi, nea_toi, pscomppars, ps]
