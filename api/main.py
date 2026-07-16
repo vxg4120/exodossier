@@ -14,7 +14,7 @@ import pathlib
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routers import attribution, conflicts, search, stats, target
+from api.routers import attribution, conflicts, search, stats, target, twoskies
 
 app = FastAPI(
     title="ExoDossier — Exoplanet Conflict Explorer API",
@@ -38,6 +38,7 @@ app.include_router(search.router, prefix="/api")
 app.include_router(target.router, prefix="/api")
 app.include_router(conflicts.router, prefix="/api")
 app.include_router(attribution.router, prefix="/api")
+app.include_router(twoskies.router, prefix="/api")
 
 
 @app.get("/api/health", tags=["health"])

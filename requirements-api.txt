@@ -4,6 +4,13 @@ fastapi
 uvicorn[standard]
 httpx            # also required by starlette's TestClient in the API tests
 
+# Follow-up bridge (api/routers/twoskies.py): SGP4 propagation of the satellite LEO catalog +
+# vectorised topocentric geometry against exoplanet-host sightlines. sgp4 ships a cp311-abi3 wheel
+# that installs cleanly on Python 3.14; numpy drives the vectorised SatrecArray path (few-seconds
+# compute over ~16k objects).
+numpy
+sgp4
+
 # MCP server (mcp/server.py). Pinned: mcp >= 1.15 pulls pyjwt[crypto] -> cryptography, whose
 # current sdist fails to build on Python 3.14 (no compatible wheel; Rust manifest parse error).
 # 1.14.1 is the newest release whose dependency set is wheels-only on 3.14 and still ships the
