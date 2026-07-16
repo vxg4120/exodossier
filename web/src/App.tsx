@@ -5,6 +5,7 @@ import { useApi } from "./hooks/useApi";
 import { compact } from "./lib/format";
 import { SourceBadge } from "./components/SourceBadge";
 import { Loading } from "./components/States";
+import { maybeAutoStartTour, startTour } from "./lib/tour";
 
 const Overview = lazy(() => import("./views/Overview").then((m) => ({ default: m.Overview })));
 const Search = lazy(() => import("./views/Search").then((m) => ({ default: m.Search })));
@@ -59,6 +60,10 @@ function Telemetry() {
 }
 
 export default function App() {
+  useEffect(() => {
+    maybeAutoStartTour();
+  }, []);
+
   return (
     <div className="app">
       <header className="topbar">
@@ -71,15 +76,25 @@ export default function App() {
         </div>
         <Telemetry />
         <Clock />
+        <button
+          type="button"
+          className="topbar__help"
+          onClick={() => startTour()}
+          title="Replay the intro tour"
+          aria-label="Replay the intro tour"
+        >
+          ?
+        </button>
       </header>
 
       <nav className="rail" aria-label="Views">
-        <div className="rail__nav">
+        <div className="rail__nav" data-tour="nav">
           {NAV.map((n) => (
             <NavLink
               key={n.to}
               to={n.to}
               end={n.end}
+              data-tour={n.to === "/followup" ? "followup" : undefined}
               className={({ isActive }) => `navlink${isActive ? " is-active" : ""}`}
             >
               <span className="navlink__idx num">{n.idx}</span>

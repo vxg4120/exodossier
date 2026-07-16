@@ -29,7 +29,7 @@ export function Overview() {
       <Async state={stats} loadingLabel="Loading catalog telemetry">
         {(s) => (
           <>
-            <div className="grid grid--stats">
+            <div className="grid grid--stats" data-tour="stats">
               <StatTile
                 lead
                 hero
@@ -84,7 +84,7 @@ export function Overview() {
                 </div>
               </Panel>
 
-              <Panel title="The dramatic three" meta="FALSE POSITIVE vs CONFIRMED">
+              <Panel title="The dramatic three" meta="FALSE POSITIVE vs CONFIRMED" dataTour="dramatic">
                 <p className="hint" style={{ marginBottom: 12 }}>
                   Three candidates where one catalog calls it a false positive while another confirms
                   it — the sharpest form of &ldquo;nobody agrees on a planet.&rdquo;
