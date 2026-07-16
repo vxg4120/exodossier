@@ -76,6 +76,17 @@ function TargetCard({ detail }: { detail: TargetDetail }) {
         </div>
       </div>
 
+      {star.ra_deg != null && star.dec_deg != null ? (
+        <Link
+          to={`/followup?ra=${star.ra_deg}&dec=${star.dec_deg}&name=${encodeURIComponent(
+            star.name,
+          )}${nConflict > 0 ? "&conflict=1" : ""}`}
+          className="followup-link"
+        >
+          Check follow-up passes — which satellites cross this sightline when you observe it ›
+        </Link>
+      ) : null}
+
       <Panel
         title="Who says what"
         meta={

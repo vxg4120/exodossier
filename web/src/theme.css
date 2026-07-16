@@ -1348,3 +1348,267 @@ button {
     opacity: 0.08;
   }
 }
+
+/* =============================================================================
+   Follow-up · Two Skies (view 03). CongestionHeatmap + `ts-` forecaster block.
+   Ported from the satellite platform; tokens only, no new palette.
+   ============================================================================= */
+.heatmap {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.heatmap__plot {
+  position: relative;
+  overflow-x: auto;
+}
+.hm-svg {
+  display: block;
+}
+.hm-cell {
+  stroke: var(--void);
+  stroke-width: 0.75;
+}
+.hm-cell.is-hover {
+  stroke: var(--signal);
+  stroke-width: 1.25;
+}
+.hm-axis-label {
+  fill: var(--ink-faint);
+  font-size: 9px;
+  font-family: var(--font-mono);
+  letter-spacing: 0.06em;
+}
+.hm-axis-title {
+  fill: var(--ink-dim);
+  font-size: 10px;
+  font-family: var(--font-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.hm-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.hm-legend {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.hm-legend__label {
+  font-size: var(--fs-micro);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.hm-legend__ramp {
+  display: flex;
+  height: 10px;
+}
+.hm-legend__swatch {
+  width: 24px;
+  height: 10px;
+}
+.hm-tip {
+  position: fixed;
+  z-index: 50;
+  pointer-events: none;
+  background: #05070a;
+  border: 1px solid var(--rule-2);
+  padding: 7px 9px;
+  font-size: var(--fs-xs);
+  color: var(--ink);
+  max-width: 220px;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.55);
+}
+.hm-tip__k {
+  color: var(--ink-faint);
+}
+.hm-tip__v {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* submit button (forecaster) */
+.btn--submit {
+  padding: 8px 16px;
+  border-color: var(--signal-dim);
+  background: var(--signal-wash);
+  color: var(--ink);
+}
+.btn--submit:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--signal) 20%, var(--surface-2));
+}
+
+/* deep link from a candidate dossier into the forecaster, pre-filled */
+.followup-link {
+  display: block;
+  border: 1px solid var(--rule-2);
+  border-left: 2px solid var(--signal);
+  background: color-mix(in srgb, var(--signal) 6%, var(--surface));
+  padding: 10px 14px;
+  color: var(--signal);
+  text-decoration: none;
+  font-size: var(--fs-sm);
+  letter-spacing: 0.02em;
+}
+.followup-link:hover {
+  background: color-mix(in srgb, var(--signal) 12%, var(--surface));
+}
+
+/* forecaster caveat + lede */
+.ts-caveat {
+  border: 1px solid var(--rule-2);
+  border-left: 2px solid var(--conflict);
+  background: color-mix(in srgb, var(--conflict) 6%, var(--surface));
+  padding: 12px 14px;
+  margin-bottom: var(--pad);
+}
+.ts-caveat__title {
+  display: block;
+  font-size: var(--fs-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--conflict);
+  margin-bottom: 6px;
+}
+.ts-caveat ul {
+  margin: 0;
+  padding-left: 16px;
+}
+.ts-caveat li {
+  font-size: var(--fs-sm);
+  color: var(--ink-dim);
+  margin: 3px 0;
+  line-height: 1.5;
+}
+.ts-lede {
+  font-size: var(--fs-sm);
+  color: var(--ink-dim);
+  line-height: 1.6;
+  margin: 0 0 12px;
+  max-width: 68ch;
+}
+.ts-lede strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* forecaster controls */
+.ts-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+}
+.ts-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 150px;
+}
+.ts-field--grow {
+  flex: 1 1 240px;
+}
+.ts-field__label {
+  font-size: var(--fs-micro);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.ts-select,
+.ts-datetime {
+  border: 1px solid var(--rule-2);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--fs-sm);
+  padding: 8px 10px;
+  outline: none;
+}
+.ts-select:focus,
+.ts-datetime:focus {
+  border-color: var(--signal-dim);
+}
+
+/* target conflict marker inside the option label / summary */
+.ts-conflict-dot {
+  color: var(--conflict);
+}
+
+/* result summary strip */
+.ts-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  align-items: baseline;
+  padding: 10px 0 14px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 12px;
+}
+.ts-summary__stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ts-summary__v {
+  font-size: var(--fs-lg);
+  color: var(--ink);
+}
+.ts-summary__v.is-signal {
+  color: var(--signal);
+}
+.ts-summary__k {
+  font-size: var(--fs-micro);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+/* operator tally chips */
+.ts-tally {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 4px 0 12px;
+}
+.ts-tally__chip {
+  font-size: var(--fs-xs);
+  color: var(--ink-dim);
+  border: 1px solid var(--rule-2);
+  background: var(--surface-2);
+  padding: 3px 8px;
+}
+.ts-tally__chip .num {
+  color: var(--signal);
+}
+
+/* shell bars (Panel A) */
+.ts-shells {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+}
+.ts-shell {
+  display: grid;
+  grid-template-columns: 92px 1fr 56px;
+  align-items: center;
+  gap: 10px;
+  font-size: var(--fs-xs);
+}
+.ts-shell__bar {
+  height: 10px;
+  background: #2472b3;
+  min-width: 1px;
+}
+.ts-shell__k {
+  color: var(--ink-faint);
+}
+.ts-shell__v {
+  text-align: right;
+  color: var(--ink-dim);
+}
