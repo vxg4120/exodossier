@@ -199,8 +199,12 @@ def targets(
 # ---------------------------------------------------------------------------------------------
 _CONGESTION_SQL = """
 WITH latest_elements AS (
+    -- Current positions only: the celestrak_gp snapshot (~32k rows), NOT the 9.7M-row
+    -- spacetrack_gp_history backfill. "Where are objects now" needs the current source; scanning
+    -- full history here cost ~15s.
     SELECT DISTINCT ON (norad_id) norad_id, perigee_km, apogee_km, inclination
     FROM gp_elements
+    WHERE source = 'celestrak_gp'
     ORDER BY norad_id, epoch DESC
 )
 SELECT
@@ -217,7 +221,8 @@ ORDER BY 1, 2
 _ASTRO_SUMMARY_SQL = """
 SELECT
     (SELECT count(*)                 FROM satellite) AS catalog_objects,
-    (SELECT count(DISTINCT norad_id) FROM gp_elements) AS tracked_with_elements,
+    (SELECT count(DISTINCT norad_id) FROM gp_elements
+        WHERE source = 'celestrak_gp') AS tracked_with_elements,
     (SELECT count(*) FROM satellite
         WHERE object_type = 'PAYLOAD' AND launch_date > current_date - 365) AS payloads_launched_1y,
     (SELECT count(*) FROM satellite
