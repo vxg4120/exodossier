@@ -11,6 +11,11 @@ httpx            # also required by starlette's TestClient in the API tests
 numpy
 sgp4
 
+# Postgres driver — the read-only API and the twoskies bridge open psycopg
+# connections (api/deps.py, api/queries.py, common/db.py). Ships manylinux +
+# aarch64 wheels, so no libpq/build tools are required in the image.
+psycopg[binary]
+
 # MCP server (mcp/server.py). Pinned: mcp >= 1.15 pulls pyjwt[crypto] -> cryptography, whose
 # current sdist fails to build on Python 3.14 (no compatible wheel; Rust manifest parse error).
 # 1.14.1 is the newest release whose dependency set is wheels-only on 3.14 and still ships the

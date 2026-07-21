@@ -1,0 +1,9 @@
+# Extra deps for the nightly catalog refresh (scripts/ingest_all.py ->
+# build_graph.py -> quality/report.py), NOT needed to serve the API:
+#   - astropy: KOI host coordinate-matching in identity/build.py (_coord_match_koi)
+#   - PyYAML: source config / ingest ledger parsing
+#   - requests: catalog HTTP pulls in ingest/
+# numpy + psycopg already come from requirements-api.txt. All ship aarch64 wheels.
+astropy
+PyYAML
+requests
