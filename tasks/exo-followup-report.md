@@ -1,9 +1,10 @@
 # Exo identity follow-up — source verification
 
 2026-09-17. Isolated branch `codex/audit-followup-20260917`, base `a7259d6`.
-Status: implementation and local verification complete; final independent re-review pending.
+Status: source implementation and independent verification complete through `ced85b5`.
 The initial review of `ba58354` found two P2 consistency gaps, both reproduced and fixed below.
-No production access, DB mutation, harvest, deployment, or external message was performed.
+No production access or mutation, harvest, deployment, or external message was performed.
+All database writes were isolated local fixtures.
 
 ## Verified defect and corrected behavior
 
@@ -157,11 +158,34 @@ Its P3 measured-overhead observation is accepted with the explicit budget above.
 Artifacts: `/tmp/codex-exo-identity-20260917/verify.md` and `verify.log`.
 The private server was stopped after the final tests and benchmark.
 
-## Remaining handoff
+## Final independent verdict
 
-1. Independent read-only `codex exec` verification against the living spec and
-   `a7259d6...HEAD`; investigate each finding before accepting amendments.
-2. Operator review/build/deploy under existing release ownership. None is implied
-   by this source commit or local database result.
-3. Production-version query-plan checks and live representative links after release,
-   especially null-only same-name hosts and ambiguous aliases.
+Read-only Codex reviewed `a7259d6...ba58354`, then the bounded follow-up
+`ba58354...ced85b5`. The final exact verdict was:
+
+> No new findings requiring changes. Reviewed `ba58354...ced85b5` and the amended
+> spec/report. Both earlier P2 findings are resolved in source.
+
+All acceptance criteria passed source review or the explicitly reported local DB
+and benchmark evidence. The reviewer independently passed 10 pure pytest tests,
+lint, whitespace checks, 27 numeric/raw-response checks across Decimal precisions
+2/28/80, and 900 integer-oracle boundary checks at 1%, 5% and 10%. It did not execute
+PostgreSQL or verify deployment. Final artifact:
+`/tmp/codex-exo-identity-20260917/verify-final.md` (execution log `verify-final.log`).
+
+The parent separately reviewed the final source and independently ran eight pure
+numeric probes with an unreachable DSN: exact/below/above 10%, a beyond-28-digit
+near-boundary value, leading plus, NaN, Infinity and large finite scientific
+notation. All passed; no DB connection was made. The parent confirmed the remaining
+performance overhead is accepted under the documented budget.
+
+## Release handoff
+
+1. Parent hands the reviewed branch to the confirmed operator for release review,
+   build and deployment. None is implied by these commits or local DB results.
+2. Verify query plans on the deployment PostgreSQL major and live representative
+   links after release, especially null-only same-name hosts and ambiguous aliases.
+3. HTTP/MCP transport and live deployment remain unverified for this patch.
+
+The private PostgreSQL process is stopped. The final documentation-only commit
+records these results; reviewed implementation ends at `ced85b5`.

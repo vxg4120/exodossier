@@ -6,10 +6,13 @@ Spec: `docs/specs/audit-followup-20260917.md`.
 - [x] Reproduce distinct-TIC name collision in a disposable local fixture database.
 - [x] Correct the common identity keys and all consumers without changing raw records.
 - [x] Run covering tests, evaluate compatibility with existing twin behavior.
-- [ ] Commit, run independent read-only verify, resolve verified findings.
-- [ ] Record final source/test state and operator handoff; no deployment by Codex.
+- [x] Commit, run independent read-only verify, resolve verified findings.
+- [x] Record final source/test state and parent release handoff; no deployment by Codex.
 
 ## Review
-Implementation and local verification complete: 40 tests, ruff and diff checks pass.
-See `tasks/exo-followup-report.md` for baseline reproduction, identity tradeoffs,
-PG14 schema limitation and synthetic benchmark. Initial review P2s reproduced and fixed; final re-review next; no deployment.
+Source verification complete through `ced85b5`: 40 local tests, ruff and diff checks
+pass. Independent review resolved two reproduced P2s and ended with no new findings;
+10 pure tests plus numeric boundary probes independently passed. See
+`tasks/exo-followup-report.md` for evidence, PG14 schema limitation, accepted synthetic
+budget, and final exact verdict. Private PostgreSQL stopped. Parent will send the
+release handoff; no production access, push or deployment was performed here.

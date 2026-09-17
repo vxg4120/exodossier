@@ -1,6 +1,6 @@
 # Spec: Guard Exo conflict identity pooling
 
-**Status:** active
+**Status:** complete (source verified; release not performed)
 **Owner:** Vib
 **Repos touched:** exodossier
 **Last updated:** 2026-09-17
@@ -50,7 +50,7 @@ sources on alternate IDs; stable canonical representative links; crosswalk/sibli
   including exact/below/above threshold, leading plus, invalid and nonfinite raw claims.
 - [x] Median of five warm synthetic runs for each 40-row conflict page stays below 1s;
   accept documented identity-safety overhead. Production-major planning remains a release check.
-- [ ] Independent read-only Codex verify covers `a7259d6...HEAD`; findings are verified
+- [x] Independent read-only Codex verify covers `a7259d6...HEAD`; findings are verified
   before source/spec amendments. Final report separates tested source from live deployment.
 
 ## Open questions
@@ -97,3 +97,9 @@ sources on alternate IDs; stable canonical representative links; crosswalk/sibli
 - 2026-09-17 (reviewed limitation) — Numeric candidate IDs take lookup precedence;
   otherwise shared alternate identifiers select the lowest match. Crosswalk uniqueness is
   scoped by source and owner, not global. This existing behavior is not redesigned here.
+- 2026-09-17 (independent Codex final review, parent verified) — Combined review covers
+  a7259d6...ced85b5. Exact verdict: "No new findings requiring changes." Both P2s
+  are resolved. Independently passed 10 pure tests, 27 numeric/raw-response checks
+  under Decimal precisions 2/28/80 and 900 integer-oracle boundary checks at 1/5/10%.
+  Parent separately passed 8 pure numeric probes. DB tests/timings remain explicitly
+  reported local evidence; deployment, transport and production planning unverified.
