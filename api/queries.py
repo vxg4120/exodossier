@@ -15,20 +15,23 @@ Conflict semantics (honest + reproducible against docs/reports/conflict_report.m
   * numeric (period/radius/teff/rstar/…) — a cross-source disagreement: >= 2 distinct values AND
     >= 2 distinct sources, with relative spread (max-min)/max over the attribute's threshold.
   * one row per planet / per host — the graph can carry twin rows for the same object (see
-    ``_IDENTITY``); the corpus, its headline counts and the target dossier all pool on the identity
-    the reader sees, so a row and the page it links to show the same disagreement.
+    ``_identity_cte``); the corpus, counts and dossier share a guarded host/candidate key,
+    so a row and the page it links to show the same disagreement.
 Disagreements are surfaced, never adjudicated.
 """
 
 from __future__ import annotations
 
+import re
+from decimal import Decimal
+from fractions import Fraction
 from typing import Any
 
 import psycopg
 
 # A source_assertion.value is TEXT; only cast the ones that look numeric. Anchored, allows an
-# optional sign, a decimal point and scientific notation ("1e+04") — everything Postgres ::numeric
-# accepts and nothing it chokes on.
+# optional minus, a decimal point and scientific notation ("1e+04"). The dossier uses
+# this same grammar; nonfinite/unsupported forms stay visible as raw claims but do not vote.
 NUM_RE = r"^-?[0-9]+\.?[0-9]*([eE][-+]?[0-9]+)?$"
 
 # Canonical disposition taxonomy (mirrors db/migrations 0004/0005 seed).
@@ -95,58 +98,97 @@ CONFLICT_TYPES: dict[str, dict[str, Any]] = {
 # ---------------------------------------------------------------------------------------------
 # helpers
 # ---------------------------------------------------------------------------------------------
-def _num(value: str) -> float | None:
-    """Parse an assertion value to float, or None if it is not numeric."""
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None
+def _num(value: str) -> Decimal | None:
+    """Parse the same finite decimal grammar used by the SQL conflict queries."""
+    return Decimal(value) if re.fullmatch(NUM_RE, value) else None
 
 
-# The identity the reader sees. The graph can carry twin rows for the same object: identity.build
-# pass 2 mints a KIC-only star for a Kepler host whose coordinate match to its TIC star fails
-# (``koi_new_star``), pass 3 then builds KOI-keyed candidate twins of the planets already under the
-# TIC star, and identity.assertions attaches the Archive's per-name claims to both twins (KOI
-# claims land on the KIC twin only). The conflict corpus is one row per planet / per host *as the
-# reader sees it* — host name plus candidate name, or host name alone — so claims group on those
-# case-folded names, every row links to the lowest id in its group, and ``resolve_target`` pools
-# the same group. Byte-order collation on the keys: the names are ASCII catalog designations, and
-# the group sort is the hot path of every count (locale collation tripled it). Keyed by the
-# assertion column each level joins on: ``join`` attaches the names to ``source_assertion sa``,
-# ``key`` selects them, ``group`` groups on them.
+# Query-time identity guard; no graph rows or claims are rewritten. A unique TIC anchor
+# permits the existing same-name TIC/KIC twin presentation. Two known TICs never pool, and a
+# null-TIC host cannot bridge them. Without one unambiguous anchor, preserve each host row.
+# This is a conservative presentation heuristic, not proof that same-name aliases are the same
+# star. Other catalog identifiers/coordinates need an independently validated identity policy.
+# Candidate names are scoped to that safe host group. Representatives depend on graph identity,
+# not on which twin happens to carry a particular assertion, so every surface links consistently.
+def _identity_cte(scope: str | None = None) -> str:
+    """Shared identity relation, optionally restricted to a page's host names.
+
+    The scoped form still inspects *every* same-name host when deciding whether a TIC anchor
+    is unambiguous. It avoids sorting the entire graph for a single dossier or provenance page.
+    ``scope`` is an internal assertion-level literal; IDs remain bound SQL parameters.
+    """
+    names = {
+        "candidate_id": "SELECT lower(s.canonical_name) COLLATE \"C\" FROM star s "
+                        "JOIN candidate c ON c.star_id = s.star_id "
+                        "WHERE c.candidate_id = ANY(%(ids)s)",
+        "star_id": "SELECT lower(canonical_name) COLLATE \"C\" FROM star "
+                   "WHERE star_id = ANY(%(ids)s)",
+        "search": "SELECT lower(s.canonical_name) COLLATE \"C\" FROM star s "
+                  "JOIN host_matches m ON m.star_id = s.star_id",
+    }
+    where = (f'WHERE lower(canonical_name) COLLATE "C" IN ({names[scope]})'
+             if scope is not None else "")
+    return f"""
+    host_anchors AS (
+        SELECT star_id, tic_id,
+               count(tic_id) OVER same_name AS n_tics,
+               min(star_id) FILTER (WHERE tic_id IS NOT NULL) OVER same_name AS anchor_id
+        FROM star
+        {where}
+        WINDOW same_name AS (PARTITION BY lower(canonical_name) COLLATE "C")
+    ),
+    host_identity AS (
+        SELECT star_id,
+               CASE WHEN tic_id IS NULL AND n_tics = 1 THEN anchor_id
+                    ELSE star_id END AS host_id
+        FROM host_anchors
+    ),
+    candidate_identity AS (
+        SELECT c.candidate_id, h.host_id,
+               min(c.candidate_id) OVER (
+                   PARTITION BY h.host_id, lower(c.canonical_name) COLLATE "C"
+               ) AS eid
+        FROM candidate c JOIN host_identity h ON h.star_id = c.star_id
+    ),
+    host_targets AS (
+        SELECT host_id, min(candidate_id) AS eid
+        FROM candidate_identity GROUP BY host_id
+    )
+"""
+
+# Every conflict eid is a stable candidate link, including host-level conflicts. Joining
+# host_targets limits the browsable host corpus to groups with a candidate dossier; a star with
+# no candidate anywhere in its group has no public target route and cannot produce a list row.
 _IDENTITY: dict[str, dict[str, str]] = {
     "candidate_id": {
-        "join": "JOIN candidate c ON c.candidate_id = sa.candidate_id "
-                "JOIN star s ON s.star_id = c.star_id",
-        "key": 'lower(s.canonical_name) COLLATE "C" AS host, '
-               'lower(c.canonical_name) COLLATE "C" AS name',
-        "group": "host, name",
+        "join": "JOIN candidate_identity ci ON ci.candidate_id = sa.candidate_id",
+        "eid": "ci.eid",
     },
     "star_id": {
-        "join": "JOIN star s ON s.star_id = sa.star_id",
-        "key": 'lower(s.canonical_name) COLLATE "C" AS host',
-        "group": "host",
+        "join": "JOIN host_identity hi ON hi.star_id = sa.star_id "
+                "JOIN host_targets ht ON ht.host_id = hi.host_id",
+        "eid": "ht.eid",
     },
 }
 
-# ``twins(eid, <id>)``: the twin ids of a page's representative ids (``%(ids)s``), found from the
-# representatives by name so the per-source claims are then fetched through the (id, attribute)
-# index instead of by joining the whole graph.
+# A page's twins use the exact identity contract as counts and dossiers. Fetching assertions
+# through these IDs retains the existing (id, attribute) index path for per-source details.
 _TWINS_CTE: dict[str, str] = {
     "candidate_id": """
     twins AS (
         SELECT r.candidate_id AS eid, t.candidate_id
         FROM candidate r
-        JOIN star rs ON rs.star_id = r.star_id
-        JOIN star ts ON lower(ts.canonical_name) = lower(rs.canonical_name)
-        JOIN candidate t ON t.star_id = ts.star_id
-                        AND lower(t.canonical_name) = lower(r.canonical_name)
+        JOIN host_identity rh ON rh.star_id = r.star_id
+        JOIN host_identity th ON th.host_id = rh.host_id
+        JOIN candidate t ON t.star_id = th.star_id
+                        AND lower(t.canonical_name) COLLATE "C"
+                            = lower(r.canonical_name) COLLATE "C"
         WHERE r.candidate_id = ANY(%(ids)s)
     )""",
     "star_id": """
     twins AS (
         SELECT r.star_id AS eid, t.star_id
-        FROM star r JOIN star t ON lower(t.canonical_name) = lower(r.canonical_name)
+        FROM host_identity r JOIN host_identity t ON t.host_id = r.host_id
         WHERE r.star_id = ANY(%(ids)s)
     )""",
 }
@@ -156,35 +198,41 @@ def _numeric_conflict_cte(attr_level: str) -> str:
     """CTE ``conflicted(eid, mn, mx, spread, n_sources)`` for a numeric attribute.
 
     ``attr_level`` is a trusted internal literal ('candidate_id' or 'star_id'), never user input.
-    Claims group on the planet's / host's identity (see ``_IDENTITY``); ``eid`` is the lowest id
-    in the group carrying the attribute. A conflict is a genuine cross-source disagreement: >= 2
-    distinct values from >= 2 distinct sources, relative spread over the caller's threshold.
+    Claims group on the guarded identity (see ``_IDENTITY``); ``eid`` is the stable
+    candidate link for that planet or host group. A conflict requires >= 2 distinct values from
+    >= 2 distinct sources, relative spread over the caller's threshold.
     """
     ident = _IDENTITY[attr_level]
+    # Filter attribute before applying numeric regex/casts. This boundary also prevents the
+    # planner from evaluating regex across unrelated claims after the computed-identity join.
     return f"""
-    WITH vals AS (
-        SELECT {ident['key']}, sa.{attr_level} AS id, (sa.value)::numeric AS v, sa.source
-        FROM source_assertion sa
+    WITH {_identity_cte()}, attribute_claims AS MATERIALIZED (
+        SELECT {attr_level}, value, source
+        FROM source_assertion WHERE attribute = %(attr)s
+    ),
+    vals AS (
+        SELECT {ident['eid']} AS eid, (sa.value)::numeric AS v, sa.source
+        FROM attribute_claims sa
         {ident['join']}
-        WHERE sa.attribute = %(attr)s
-          AND sa.value ~ %(numre)s
+        WHERE sa.value ~ %(numre)s
     ),
     agg AS (
-        SELECT min(id) AS eid, min(v) AS mn, max(v) AS mx,
+        SELECT eid, min(v) AS mn, max(v) AS mx,
                count(DISTINCT v) AS n_values, count(DISTINCT source) AS n_sources
-        FROM vals GROUP BY {ident['group']}
+        FROM vals GROUP BY eid
     ),
-    conflicted AS (
+    conflicted AS MATERIALIZED (
         SELECT eid, mn, mx, n_sources, (mx - mn) / mx AS spread
         FROM agg
-        WHERE n_values >= 2 AND n_sources >= 2 AND mx > 0 AND (mx - mn) / mx > %(threshold)s
+        WHERE n_values >= 2 AND n_sources >= 2 AND mx > 0
+          AND mx - mn > mx * %(threshold)s::numeric
     )
     """
 
 
 _DISPO_CTE = f"""
-    WITH dispo AS (
-        SELECT {_IDENTITY['candidate_id']['key']}, sa.candidate_id AS id,
+    WITH {_identity_cte()}, dispo AS (
+        SELECT {_IDENTITY['candidate_id']['eid']} AS eid,
                dm.canonical_disposition AS canon
         FROM source_assertion sa
         {_IDENTITY['candidate_id']['join']}
@@ -192,13 +240,13 @@ _DISPO_CTE = f"""
           ON dm.source = sa.source AND dm.source_value = sa.value
         WHERE sa.attribute = 'disposition'
     ),
-    conflicted AS (
-        SELECT min(id) AS eid,
+    conflicted AS MATERIALIZED (
+        SELECT eid,
                array_agg(DISTINCT canon ORDER BY canon) AS dispositions,
                (bool_or(canon = 'FALSE_POSITIVE')
                 AND bool_or(canon IN ('CONFIRMED', 'KNOWN_PLANET'))) AS dramatic
         FROM dispo
-        GROUP BY {_IDENTITY['candidate_id']['group']}
+        GROUP BY eid
         HAVING count(DISTINCT canon) >= 2
     )
 """
@@ -291,15 +339,25 @@ def search_targets(db: psycopg.Connection, q: str, limit: int = 50) -> list[dict
     """Resolve any TIC / TOI / CTOI / KOI / planet-name / host to candidate targets.
 
     A host match (star name or a star-level identifier like a TIC) expands to every candidate of
-    that star, so every result deep-links to a target. Exact matches rank first, then prefix, then
-    substring; ties break on name.
+    its guarded host group, so every result deep-links to a target. Exact matches rank first, then
+    prefix, then substring; ties break on name.
     """
     q = q.strip()
     if not q:
         return []
     params = {"ex": q, "prefix": q + "%", "like": "%" + q + "%", "limit": limit}
-    sql = """
-    WITH matches AS (
+    sql = f"""
+    WITH host_matches AS (
+        SELECT star_id, 2 AS rank FROM star WHERE canonical_name ILIKE %(like)s
+        UNION ALL
+        SELECT star_id,
+               CASE WHEN lower(id_value) = lower(%(ex)s) THEN 0
+                    WHEN id_value ILIKE %(prefix)s THEN 1 ELSE 2 END AS rank
+        FROM entity_identifier
+        WHERE star_id IS NOT NULL AND id_value ILIKE %(like)s
+    ),
+    {_identity_cte('search')},
+    matches AS (
         -- candidate canonical name
         SELECT c.candidate_id AS cid,
                CASE WHEN lower(c.canonical_name) = lower(%(ex)s) THEN 0
@@ -314,17 +372,13 @@ def search_targets(db: psycopg.Connection, q: str, limit: int = 50) -> list[dict
         FROM entity_identifier ei
         WHERE ei.candidate_id IS NOT NULL AND ei.id_value ILIKE %(like)s
         UNION ALL
-        -- host star name -> all its candidates
-        SELECT c.candidate_id AS cid, 2 AS rank
-        FROM candidate c JOIN star s ON s.star_id = c.star_id
-        WHERE s.canonical_name ILIKE %(like)s
-        UNION ALL
-        -- star-level identifier (tic / kic / gaia / hd / hip / name) -> all its candidates
-        SELECT c.candidate_id AS cid,
-               CASE WHEN lower(ei.id_value) = lower(%(ex)s) THEN 0
-                    WHEN ei.id_value ILIKE %(prefix)s THEN 1 ELSE 2 END AS rank
-        FROM entity_identifier ei JOIN candidate c ON c.star_id = ei.star_id
-        WHERE ei.star_id IS NOT NULL AND ei.id_value ILIKE %(like)s
+        -- Host matches expand through the same guard as exact lookup, including aliases
+        -- without candidates; an ambiguous null-TIC alias cannot borrow foreign candidates.
+        SELECT c.candidate_id AS cid, m.rank
+        FROM host_matches m
+        JOIN host_identity r ON r.star_id = m.star_id
+        JOIN host_identity t ON t.host_id = r.host_id
+        JOIN candidate c ON c.star_id = t.star_id
     ),
     best AS (SELECT cid, min(rank) AS rank FROM matches GROUP BY cid)
     SELECT c.candidate_id, c.canonical_name AS target, c.disposition,
@@ -332,7 +386,7 @@ def search_targets(db: psycopg.Connection, q: str, limit: int = 50) -> list[dict
     FROM best b
     JOIN candidate c ON c.candidate_id = b.cid
     JOIN star s ON s.star_id = c.star_id
-    ORDER BY b.rank, c.canonical_name
+    ORDER BY b.rank, c.canonical_name, c.candidate_id
     LIMIT %(limit)s
     """
     with db.cursor() as cur:
@@ -382,52 +436,56 @@ def _resolve_candidate_id(db: psycopg.Connection, ident: str) -> int | None:
         row = cur.fetchone()
         if row:
             return row["candidate_id"]
-        # host: star name or star-level identifier -> first candidate of that star
+        # Match hosts before looking for a candidate: an identifier can belong to a pooled
+        # alias with no candidates of its own. Expansion must use the same guarded host group.
         cur.execute(
             """
-            SELECT c.candidate_id
+            SELECT DISTINCT s.star_id
             FROM star s
-            JOIN candidate c ON c.star_id = s.star_id
             LEFT JOIN entity_identifier ei
               ON ei.star_id = s.star_id AND lower(ei.id_value) = lower(%(ex)s)
             WHERE lower(s.canonical_name) = lower(%(ex)s) OR ei.star_id IS NOT NULL
-            ORDER BY c.candidate_id
-            LIMIT 1
             """,
             {"ex": ident},
+        )
+        sids = [r["star_id"] for r in cur.fetchall()]
+        if not sids:
+            return None
+        cur.execute(
+            f"""
+            WITH {_identity_cte('star_id')}
+            SELECT c.candidate_id
+            FROM host_identity r
+            JOIN host_identity t ON t.host_id = r.host_id
+            JOIN candidate c ON c.star_id = t.star_id
+            WHERE r.star_id = ANY(%(ids)s)
+            ORDER BY c.candidate_id LIMIT 1
+            """,
+            {"ids": sids},
         )
         row = cur.fetchone()
         return row["candidate_id"] if row else None
 
 
 def _identity_group(cur: psycopg.Cursor, cid: int) -> tuple[list[int], list[int]]:
-    """The candidate ids and star ids that name the same planet / host as ``cid`` — its twins, if
-    the graph carries any: the identity the conflict corpus pools on — ascending, so ``[0]`` is
-    the representative the corpus links to."""
+    """Candidate and host twins under the shared guard, ordered by stable graph ID."""
     cur.execute(
-        """
-        SELECT t.star_id
-        FROM candidate c
-        JOIN star s ON s.star_id = c.star_id
-        JOIN star t ON lower(t.canonical_name) = lower(s.canonical_name)
-        WHERE c.candidate_id = %(cid)s
-        ORDER BY t.star_id
+        f"""
+        WITH {_identity_cte('candidate_id')}
+        SELECT ARRAY(
+                   SELECT t.candidate_id FROM candidate_identity t
+                   WHERE t.eid = r.eid ORDER BY t.candidate_id
+               ) AS cids,
+               ARRAY(
+                   SELECT h.star_id FROM host_identity h
+                   WHERE h.host_id = r.host_id ORDER BY h.star_id
+               ) AS sids
+        FROM candidate_identity r WHERE r.candidate_id = %(cid)s
         """,
-        {"cid": cid},
+        {"cid": cid, "ids": [cid]},
     )
-    sids = [r["star_id"] for r in cur.fetchall()]
-    cur.execute(
-        """
-        SELECT t.candidate_id
-        FROM candidate c
-        JOIN candidate t ON t.star_id = ANY(%(sids)s)
-                        AND lower(t.canonical_name) = lower(c.canonical_name)
-        WHERE c.candidate_id = %(cid)s
-        ORDER BY t.candidate_id
-        """,
-        {"cid": cid, "sids": sids},
-    )
-    return [r["candidate_id"] for r in cur.fetchall()], sids
+    group = cur.fetchone()
+    return group["cids"], group["sids"]
 
 
 def resolve_target(db: psycopg.Connection, ident: str | int) -> dict[str, Any] | None:
@@ -503,10 +561,11 @@ def resolve_target(db: psycopg.Connection, ident: str | int) -> dict[str, Any] |
         # planet's own representative
         cur.execute(
             """
-            SELECT DISTINCT ON (lower(canonical_name)) candidate_id, canonical_name, disposition
+            SELECT DISTINCT ON (lower(canonical_name) COLLATE "C")
+                   candidate_id, canonical_name, disposition
             FROM candidate
             WHERE star_id = ANY(%(sids)s) AND candidate_id <> ALL(%(cids)s)
-            ORDER BY lower(canonical_name), candidate_id
+            ORDER BY lower(canonical_name) COLLATE "C", candidate_id
             """,
             {"cids": cids, "sids": sids},
         )
@@ -604,7 +663,7 @@ def _attribute_conflict(attr: str, meta: dict, items: list[dict]) -> bool:
     threshold = meta.get("threshold")
     if threshold is None:
         return False
-    by_source: dict[str, set[float]] = {}
+    by_source: dict[str, set[Decimal]] = {}
     for it in items:
         v = _num(it["value"])
         if v is not None:
@@ -613,7 +672,9 @@ def _attribute_conflict(attr: str, meta: dict, items: list[dict]) -> bool:
     if len(by_source) < 2 or len(values) < 2:
         return False
     mx = max(values)
-    return mx > 0 and (mx - min(values)) / mx > threshold
+    # Cross-multiply exactly, matching SQL numeric arithmetic. Fraction avoids both binary
+    # float rounding and Decimal's default context rounding at a strict threshold boundary.
+    return mx > 0 and Fraction(mx) - Fraction(min(values)) > Fraction(mx) * Fraction(str(threshold))
 
 
 # ---------------------------------------------------------------------------------------------
@@ -646,7 +707,7 @@ def _list_disposition(db: psycopg.Connection, limit: int, offset: int) -> tuple[
             FROM conflicted x
             JOIN candidate c ON c.candidate_id = x.eid
             JOIN star s ON s.star_id = c.star_id
-            ORDER BY x.dramatic DESC, c.canonical_name
+            ORDER BY x.dramatic DESC, c.canonical_name, c.candidate_id
             LIMIT %(limit)s OFFSET %(offset)s
             """,
             {"limit": limit, "offset": offset},
@@ -679,7 +740,7 @@ def _dispo_by_source(db: psycopg.Connection, candidate_ids: list[int]) -> dict[i
     with db.cursor() as cur:
         cur.execute(
             f"""
-            WITH {_TWINS_CTE['candidate_id']}
+            WITH {_identity_cte('candidate_id')}, {_TWINS_CTE['candidate_id']}
             SELECT DISTINCT t.eid AS candidate_id, sa.source, dm.canonical_disposition AS canon
             FROM twins t
             JOIN source_assertion sa
@@ -712,31 +773,14 @@ def _list_numeric(
         cur.execute(cte + "SELECT count(*) AS n FROM conflicted", params)
         total = cur.fetchone()["n"]
 
-        if spec["level"] == "candidate":
-            join = """
+        join = """
             SELECT c.candidate_id, c.canonical_name AS target, c.disposition,
                    s.canonical_name AS host, s.tic_id,
                    x.mn, x.mx, x.spread, x.n_sources
             FROM conflicted x
             JOIN candidate c ON c.candidate_id = x.eid
             JOIN star s ON s.star_id = c.star_id
-            ORDER BY x.spread DESC, c.canonical_name
-            LIMIT %(limit)s OFFSET %(offset)s
-            """
-        else:
-            # star-level attribute: link to the star's first candidate as the target
-            join = """
-            SELECT rep.candidate_id, rep.canonical_name AS target, rep.disposition,
-                   s.canonical_name AS host, s.tic_id,
-                   x.mn, x.mx, x.spread, x.n_sources
-            FROM conflicted x
-            JOIN star s ON s.star_id = x.eid
-            JOIN LATERAL (
-                SELECT candidate_id, canonical_name, disposition
-                FROM candidate WHERE star_id = s.star_id
-                ORDER BY candidate_id LIMIT 1
-            ) rep ON true
-            ORDER BY x.spread DESC, s.canonical_name
+            ORDER BY x.spread DESC, c.canonical_name, c.candidate_id
             LIMIT %(limit)s OFFSET %(offset)s
             """
         cur.execute(cte + join, params)
@@ -781,7 +825,7 @@ def _numeric_by_source(
         with db.cursor() as cur:
             cur.execute(
                 f"""
-                WITH {_TWINS_CTE['candidate_id']}
+                WITH {_identity_cte('candidate_id')}, {_TWINS_CTE['candidate_id']}
                 SELECT t.eid, sa.source, min((sa.value)::numeric) AS mn,
                        max((sa.value)::numeric) AS mx,
                        count(DISTINCT (sa.value, sa.source_ref)) AS n
@@ -809,7 +853,7 @@ def _numeric_by_source(
         star_ids = list(set(star_of.values()))
         cur.execute(
             f"""
-            WITH {_TWINS_CTE['star_id']}
+            WITH {_identity_cte('star_id')}, {_TWINS_CTE['star_id']}
             SELECT t.eid, sa.source, min((sa.value)::numeric) AS mn,
                    max((sa.value)::numeric) AS mx,
                    count(DISTINCT (sa.value, sa.source_ref)) AS n
