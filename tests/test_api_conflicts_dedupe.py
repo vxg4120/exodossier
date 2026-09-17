@@ -5,8 +5,9 @@ star fails (``koi_new_star``); pass 3 then builds KOI-keyed candidate twins of t
 under the TIC star, and identity.assertions attaches the Archive's per-name claims to both twins.
 Before the dedupe every such planet listed twice on /conflicts (identical spread and range, one
 row carrying the KOI claim) and counted twice in the headline. The corpus and its counts now
-dedupe on the identity the reader sees — host name + candidate name (host name alone for
-star-level axes) — and pool the twins' claims into that one row.
+pool only within a guarded host group: distinct TICs remain separate; same-name null-TIC
+rows join only one unambiguous TIC host. Candidate names are scoped to that group. Unanchored
+host rows remain separate even when display names match.
 
 Fixture tests run on an isolated graph (clean_graph: truncated + rolled back); the consistency
 tests run against whatever graph DATABASE_URL points at.
@@ -249,17 +250,201 @@ def test_ledger_reports_last_landed_pull_beside_latest_check(graph):
 # --- consistency on whatever graph is present ---------------------------------------------------
 
 
-def _identity(ctype: str, row: dict) -> tuple:
-    return (row["host"].lower(),) if ctype == "teff" else (
-        row["host"].lower(), row["target"].lower(),
-    )
-
-
 @pytest.mark.db
 @pytest.mark.parametrize("ctype", ["disposition", "radius", "teff"])
 def test_headline_count_is_the_list_total_and_pages_carry_no_twins(db_conn, ctype):
     db_conn.row_factory = dict_row
     page = queries.list_conflicts(db_conn, ctype, limit=200)
     assert queries.catalog_stats(db_conn)["conflicts"][ctype] == page["total"]
-    keys = [_identity(ctype, r) for r in page["rows"]]
+    keys = [r["candidate_id"] for r in page["rows"]]
     assert len(keys) == len(set(keys))
+
+
+@pytest.mark.db
+@pytest.mark.parametrize("tics", [(111, 222), (111, None, 222), (None, None)])
+def test_same_name_different_hosts_do_not_pool_claims_crosswalks_or_siblings(graph, tics):
+    """Display names cannot merge distinct TICs, ambiguous aliases, or unanchored hosts."""
+    systems = []
+    sources = ("ps", "koi", "exofop_toi")
+    dispositions = ("Published Confirmed", "FALSE POSITIVE", "PC")
+    with graph.cursor() as cur:
+        run = _run(cur)
+        for i, tic in enumerate(tics):
+            sid = _star(cur, "Collision" if i % 2 == 0 else "COLLISION", tic)
+            cid = _candidate(cur, sid, "Collision b")
+            sibling = _candidate(cur, sid, f"Own sibling {i}")
+            cur.execute(
+                "INSERT INTO entity_identifier (star_id, id_type, id_value, source) "
+                "VALUES (%s, 'kic', %s, 'test')", (sid, f"host-{i}"),
+            )
+            cur.execute(
+                "INSERT INTO entity_identifier (candidate_id, id_type, id_value, source) "
+                "VALUES (%s, 'koi', %s, 'test')", (cid, f"planet-{i}"),
+            )
+            _claim(cur, run, "star_id", sid, "teff_k", str(3000 + i * 1500), sources[i])
+            _claim(cur, run, "candidate_id", cid, "planet_radius_re", str(i + 1), sources[i])
+            _claim(cur, run, "candidate_id", cid, "disposition", dispositions[i], sources[i])
+            systems.append((sid, cid, sibling, i))
+
+    for ctype in ("radius", "teff", "disposition"):
+        page = queries.list_conflicts(graph, ctype)
+        assert page["total"] == len(page["rows"]) == 0, ctype
+    for sid, cid, sibling, i in systems:
+        for ident in (cid, f"planet-{i}", f"host-{i}"):
+            target = queries.resolve_target(graph, ident)
+            assert target["candidate"]["candidate_id"] == cid
+            assert target["star"]["star_id"] == sid
+            assert {x["id_value"] for x in target["identifiers"]} == {
+                f"planet-{i}", f"host-{i}",
+            }
+            assert {a["source"] for g in target["attributes"] for a in g["assertions"]} == {
+                sources[i],
+            }
+            assert [s["candidate_id"] for s in target["sibling_candidates"]] == [sibling]
+            assert queries.target_conflicts(graph, ident)["has_conflict"] is False
+
+
+@pytest.mark.db
+def test_same_name_hosts_keep_their_real_conflicts_and_list_dossier_mcp_agree(graph):
+    """No source or range from an unrelated identified/null-TIC host may leak into a row."""
+    cids = []
+    with graph.cursor() as cur:
+        run = _run(cur)
+        for i, tic in enumerate((111, 222, None)):
+            sid = _star(cur, "Collision", tic)
+            cid = _candidate(cur, sid, "Collision b")
+            cids.append(cid)
+            for source, value in (("ps", 1 + i * 10), ("koi", 2 + i * 20)):
+                _claim(cur, run, "candidate_id", cid, "planet_radius_re", str(value), source)
+                _claim(cur, run, "star_id", sid, "teff_k", str(value * 1000), source)
+            _claim(cur, run, "candidate_id", cid, "disposition", "Published Confirmed", "ps")
+            _claim(cur, run, "candidate_id", cid, "disposition", "FALSE POSITIVE", "koi")
+
+    for ctype in ("radius", "teff", "disposition"):
+        page = queries.list_conflicts(graph, ctype, limit=100)
+        assert page["total"] == len(page["rows"]) == 3
+        count = (queries.count_disposition_conflicts(graph) if ctype == "disposition"
+                 else queries.count_numeric_conflicts(graph, ctype))
+        assert count == page["total"]
+        assert {r["candidate_id"] for r in page["rows"]} == set(cids)
+        # Same display names and equal spreads still have a stable ID tie-break across pages.
+        paged = [queries.list_conflicts(graph, ctype, limit=1, offset=i)["rows"][0]
+                 for i in range(3)]
+        assert [r["candidate_id"] for r in paged] == [r["candidate_id"] for r in page["rows"]]
+        for row in page["rows"]:
+            dossier = queries.resolve_target(graph, row["candidate_id"])
+            group = next(g for g in dossier["attributes"] if g["attribute"] == row["attribute"])
+            assert group["conflict"] is True
+            assert {s["source"] for s in row["by_source"]} == {
+                a["source"] for a in group["assertions"]
+            }
+            if ctype != "disposition":
+                vals = [float(a["value"]) for a in group["assertions"]]
+                assert (row["min"], row["max"]) == (min(vals), max(vals))
+            tool = queries.target_conflicts(graph, row["candidate_id"])
+            assert row["attribute"] in tool["conflict_attributes"]
+
+
+@pytest.mark.db
+def test_conflict_link_is_stable_when_only_later_twin_has_claims(graph):
+    """The representative is a property of the identity group, not of who has this attribute."""
+    with graph.cursor() as cur:
+        run = _run(cur)
+        tic_star, kic_star = _twin_hosts(cur)
+        first = _candidate(cur, tic_star, "Kepler-444 e")
+        later = _candidate(cur, kic_star, "KEPLER-444 E")
+        for source, value in (("ps", "1"), ("koi", "2")):
+            _claim(cur, run, "candidate_id", later, "planet_radius_re", value, source)
+            _claim(cur, run, "star_id", kic_star, "teff_k", str(int(value) * 3000), source)
+        _claim(cur, run, "candidate_id", later, "disposition", "Published Confirmed", "ps")
+        _claim(cur, run, "candidate_id", later, "disposition", "FALSE POSITIVE", "koi")
+
+    for ctype in ("radius", "teff", "disposition"):
+        page = queries.list_conflicts(graph, ctype)
+        assert page["total"] == len(page["rows"]) == 1
+        (row,) = page["rows"]
+        assert row["candidate_id"] == first
+        dossier = queries.resolve_target(graph, row["candidate_id"])
+        assert row["candidate_id"] == dossier["candidate"]["candidate_id"]
+        assert row["attribute"] in dossier["conflict_attributes"]
+
+
+@pytest.mark.db
+def test_star_claims_on_candidate_less_twin_still_link_to_group_target(graph):
+    with graph.cursor() as cur:
+        run = _run(cur)
+        tic_star, kic_star = _twin_hosts(cur)
+        first = _candidate(cur, tic_star, "Kepler-444 e")
+        cur.execute(
+            "INSERT INTO entity_identifier (star_id, id_type, id_value, source) "
+            "VALUES (%s, 'kic', 'alias-without-candidate', 'test')", (kic_star,),
+        )
+        _claim(cur, run, "star_id", kic_star, "teff_k", "3000", "ps")
+        _claim(cur, run, "star_id", kic_star, "teff_k", "6000", "koi")
+
+    page = queries.list_conflicts(graph, "teff")
+    assert page["total"] == len(page["rows"]) == 1
+    assert page["rows"][0]["candidate_id"] == first
+    assert "teff_k" in queries.resolve_target(graph, first)["conflict_attributes"]
+
+    by_alias = queries.resolve_target(graph, "alias-without-candidate")
+    assert by_alias is not None
+    assert by_alias["candidate"]["candidate_id"] == first
+    assert "teff_k" in queries.target_conflicts(graph, "alias-without-candidate")[
+        "conflict_attributes"
+    ]
+
+
+@pytest.mark.db
+def test_null_tic_first_and_case_variant_preserve_unambiguous_anchor(graph):
+    with graph.cursor() as cur:
+        run = _run(cur)
+        null_star = _star(cur, "kEpLeR-444")
+        tic_star = _star(cur, "Kepler-444", 394172596)
+        first = _candidate(cur, null_star, "Kepler-444 e")
+        later = _candidate(cur, tic_star, "KEPLER-444 E")
+        _claim(cur, run, "candidate_id", first, "planet_radius_re", "1", "koi")
+        _claim(cur, run, "candidate_id", later, "planet_radius_re", "2", "ps")
+
+    page = queries.list_conflicts(graph, "radius")
+    assert page["total"] == len(page["rows"]) == 1
+    assert page["rows"][0]["candidate_id"] == first
+    for cid in (first, later):
+        dossier = queries.resolve_target(graph, cid)
+        assert dossier["candidate"]["candidate_id"] == first
+        assert "planet_radius_re" in dossier["conflict_attributes"]
+
+
+@pytest.mark.db
+def test_empty_and_candidate_less_host_groups_do_not_create_unlinkable_rows(graph):
+    for ctype in ("radius", "teff", "disposition"):
+        page = queries.list_conflicts(graph, ctype)
+        assert page["total"] == len(page["rows"]) == 0
+    assert queries.resolve_target(graph, "missing") is None
+    assert queries.target_conflicts(graph, "missing") is None
+    with graph.cursor() as cur:
+        run = _run(cur)
+        sid = _star(cur, "No planets yet", 987654)
+        _claim(cur, run, "star_id", sid, "teff_k", "3000", "ps")
+        _claim(cur, run, "star_id", sid, "teff_k", "6000", "koi")
+    page = queries.list_conflicts(graph, "teff")
+    assert queries.count_numeric_conflicts(graph, "teff") == page["total"] == len(page["rows"]) == 0
+    with graph.cursor() as cur:
+        cur.execute("SELECT count(*) AS n FROM source_assertion WHERE star_id = %s", (sid,))
+        # Claims remain intact, outside the candidate-linked corpus.
+        assert cur.fetchone()["n"] == 2
+
+
+@pytest.mark.db
+def test_ambiguous_candidate_less_alias_identifier_does_not_resolve_foreign_target(graph):
+    with graph.cursor() as cur:
+        for tic in (111, 222):
+            sid = _star(cur, "Collision", tic)
+            _candidate(cur, sid, "Collision b")
+        alias = _star(cur, "Collision")
+        cur.execute(
+            "INSERT INTO entity_identifier (star_id, id_type, id_value, source) "
+            "VALUES (%s, 'kic', 'ambiguous-alias', 'test')", (alias,),
+        )
+    assert queries.resolve_target(graph, "ambiguous-alias") is None
+    assert queries.target_conflicts(graph, "ambiguous-alias") is None
