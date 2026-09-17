@@ -149,6 +149,80 @@ def test_teff_twin_hosts_are_one_row_and_one_count(graph):
     assert row["n_sources"] == 3
 
 
+def _twin_system(cur, run: int) -> tuple[int, int, int, int]:
+    """Kepler-444 as the graph carries it: twin hosts, twin ``e`` planets conflicting on radius
+    and disposition, twin hosts conflicting on Teff. Returns (tic_star, kic_star, a, b)."""
+    tic_star, kic_star = _twin_hosts(cur)
+    a, b = _twin_planet(cur, run, tic_star, kic_star)
+    for cand in (a, b):
+        _claim(cur, run, "candidate_id", cand, "disposition", "Published Confirmed", "ps")
+    _claim(cur, run, "candidate_id", b, "disposition", "FALSE POSITIVE", "koi")
+    for star, other in ((tic_star, "exofop_toi"), (kic_star, "koi")):
+        _claim(cur, run, "star_id", star, "teff_k", "5780", other)
+        _claim(cur, run, "star_id", star, "teff_k", "5040", "ps", "Campante 2015")
+    return tic_star, kic_star, a, b
+
+
+@pytest.mark.db
+def test_every_conflict_row_deep_links_to_a_dossier_showing_that_conflict(graph):
+    """The corpus row and the page it links to must agree: whichever twin the row links to, and
+    whether the reader arrives by id or by name, the dossier (and the MCP target_conflicts tool)
+    pools the same twins' claims the row pooled, so a FALSE POSITIVE vs CONFIRMED row never lands
+    on a page that says nobody disagrees."""
+    with graph.cursor() as cur:
+        _twin_system(cur, _run(cur))
+
+    for ctype in ("radius", "disposition", "teff"):
+        (row,) = queries.list_conflicts(graph, ctype, limit=10)["rows"]
+        for ident in (row["candidate_id"], row["target"]):
+            page = queries.resolve_target(graph, ident)
+            assert row["attribute"] in page["conflict_attributes"], (ctype, ident)
+            group = next(g for g in page["attributes"] if g["attribute"] == row["attribute"])
+            assert {s["source"] for s in row["by_source"]} == {
+                a["source"] for a in group["assertions"]
+            }, (ctype, ident)
+            tool = queries.target_conflicts(graph, ident)
+            assert tool["has_conflict"] and row["attribute"] in tool["conflict_attributes"]
+
+
+@pytest.mark.db
+def test_dossier_is_one_page_per_planet(graph):
+    """Both twins, the planet name and a twin-only identifier resolve to the same pooled dossier:
+    the representative candidate, the union of the crosswalk (once per identifier), each claim
+    once per publication, and each sibling planet once."""
+    with graph.cursor() as cur:
+        run = _run(cur)
+        tic_star, kic_star, a, b = _twin_system(cur, run)
+        for star in (tic_star, kic_star):  # a sibling the graph also carries twice
+            _candidate(cur, star, "Kepler-444 c")
+        cur.execute(
+            "INSERT INTO entity_identifier (candidate_id, id_type, id_value, source) VALUES "
+            "(%s, 'name', 'Kepler-444 e', 'nea'), (%s, 'name', 'Kepler-444 e', 'nea'), "
+            "(%s, 'koi', 'K03158.05', 'nea')",
+            (a, b, b),
+        )
+        cur.execute(
+            "INSERT INTO entity_identifier (star_id, id_type, id_value, source) VALUES "
+            "(%s, 'tic', '394172596', 'exofop'), (%s, 'kic', '6278762', 'nea')",
+            (tic_star, kic_star),
+        )
+
+    pages = [queries.resolve_target(graph, i) for i in (a, b, "Kepler-444 e", "K03158.05")]
+    assert {p["candidate"]["candidate_id"] for p in pages} == {min(a, b)}
+    page = pages[0]
+    assert page["star"]["tic_id"] == "394172596"
+    ids = [(i["owner"], i["id_type"], i["id_value"]) for i in page["identifiers"]]
+    assert sorted(ids) == [
+        ("candidate", "koi", "K03158.05"), ("candidate", "name", "Kepler-444 e"),
+        ("star", "kic", "6278762"), ("star", "tic", "394172596"),
+    ]
+    radius = next(g for g in page["attributes"] if g["attribute"] == "planet_radius_re")
+    assert sorted((x["source"], x["value"]) for x in radius["assertions"]) == [
+        ("koi", "0.62"), ("ps", "0.42"), ("ps", "86.5"), ("pscomppars", "0.546"),
+    ]
+    assert [s["name"] for s in page["sibling_candidates"]] == ["Kepler-444 c"]
+
+
 @pytest.mark.db
 def test_ledger_reports_last_landed_pull_beside_latest_check(graph):
     """A skipped_fresh check must not hide the last pull that landed rows."""

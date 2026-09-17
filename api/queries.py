@@ -375,15 +375,50 @@ def _resolve_candidate_id(db: psycopg.Connection, ident: str) -> int | None:
         return row["candidate_id"] if row else None
 
 
+def _identity_group(cur: psycopg.Cursor, cid: int) -> tuple[list[int], list[int]]:
+    """The candidate ids and star ids that name the same planet / host as ``cid`` — its twins, if
+    the graph carries any: the identity the conflict corpus pools on — ascending, so ``[0]`` is
+    the representative the corpus links to."""
+    cur.execute(
+        """
+        SELECT t.star_id
+        FROM candidate c
+        JOIN star s ON s.star_id = c.star_id
+        JOIN star t ON lower(t.canonical_name) = lower(s.canonical_name)
+        WHERE c.candidate_id = %(cid)s
+        ORDER BY t.star_id
+        """,
+        {"cid": cid},
+    )
+    sids = [r["star_id"] for r in cur.fetchall()]
+    cur.execute(
+        """
+        SELECT t.candidate_id
+        FROM candidate c
+        JOIN candidate t ON t.star_id = ANY(%(sids)s)
+                        AND lower(t.canonical_name) = lower(c.canonical_name)
+        WHERE c.candidate_id = %(cid)s
+        ORDER BY t.candidate_id
+        """,
+        {"cid": cid, "sids": sids},
+    )
+    return [r["candidate_id"] for r in cur.fetchall()], sids
+
+
 def resolve_target(db: psycopg.Connection, ident: str | int) -> dict[str, Any] | None:
     """Full target dossier: canonical identity, complete crosswalk, the who-says-what table
     (every source_assertion grouped by attribute) with per-attribute conflict flags, and the
-    resolved/canonical value where the graph has one. Returns None when nothing resolves."""
+    resolved/canonical value where the graph has one. Returns None when nothing resolves.
+
+    One dossier per planet: whichever twin ``ident`` lands on, the canonical row is the
+    representative's and the crosswalk, claims and siblings pool over the whole identity group —
+    exactly what the conflict corpus pooled into the row that links here."""
     cid = _resolve_candidate_id(db, str(ident))
     if cid is None:
         return None
 
     with db.cursor() as cur:
+        cids, sids = _identity_group(cur, cid)
         cur.execute(
             """
             SELECT c.candidate_id, c.canonical_name, c.disposition, c.period_days,
@@ -393,21 +428,21 @@ def resolve_target(db: psycopg.Connection, ident: str | int) -> dict[str, Any] |
             FROM candidate c JOIN star s ON s.star_id = c.star_id
             WHERE c.candidate_id = %s
             """,
-            (cid,),
+            (cids[0],),
         )
         c = cur.fetchone()
-        star_id = c["star_id"]
 
-        # full crosswalk: candidate-owned + star-owned identifiers
+        # full crosswalk: candidate-owned + star-owned identifiers, once per identifier
         cur.execute(
             """
-            SELECT id_type, id_value, source, confidence,
+            SELECT id_type, id_value, source, max(confidence) AS confidence,
                    CASE WHEN candidate_id IS NOT NULL THEN 'candidate' ELSE 'star' END AS owner
             FROM entity_identifier
-            WHERE candidate_id = %(cid)s OR star_id = %(sid)s
-            ORDER BY owner, id_type, source
+            WHERE candidate_id = ANY(%(cids)s) OR star_id = ANY(%(sids)s)
+            GROUP BY 1, 2, 3, 5
+            ORDER BY owner, id_type, source, id_value
             """,
-            {"cid": cid, "sid": star_id},
+            {"cids": cids, "sids": sids},
         )
         identifiers = [
             {
@@ -420,31 +455,35 @@ def resolve_target(db: psycopg.Connection, ident: str | int) -> dict[str, Any] |
             for r in cur.fetchall()
         ]
 
-        # every assertion for the candidate AND its host star, with canonical disposition mapped
+        # every assertion for the planet AND its host, with canonical disposition mapped; the same
+        # Archive row attached to two twins is one claim (value + citation), as in the corpus
         cur.execute(
             """
-            SELECT sa.attribute, sa.source, sa.value, sa.unit, sa.source_ref, sa.observed_at,
-                   dm.canonical_disposition,
+            SELECT sa.attribute, sa.source, sa.value, sa.unit, sa.source_ref,
+                   max(sa.observed_at) AS observed_at, dm.canonical_disposition,
                    CASE WHEN sa.candidate_id IS NOT NULL THEN 'candidate' ELSE 'star' END AS level
             FROM source_assertion sa
             LEFT JOIN disposition_mapping dm
               ON sa.attribute = 'disposition'
              AND dm.source = sa.source AND dm.source_value = sa.value
-            WHERE sa.candidate_id = %(cid)s OR sa.star_id = %(sid)s
-            ORDER BY sa.attribute, sa.source, sa.observed_at DESC
+            WHERE sa.candidate_id = ANY(%(cids)s) OR sa.star_id = ANY(%(sids)s)
+            GROUP BY 1, 2, 3, 4, 5, 7, 8
+            ORDER BY sa.attribute, sa.source, observed_at DESC
             """,
-            {"cid": cid, "sid": star_id},
+            {"cids": cids, "sids": sids},
         )
         raw_assertions = cur.fetchall()
 
-        # sibling candidates on the same star (other planets in the system)
+        # sibling planets of the host (its twins included), one per planet, linking to each
+        # planet's own representative
         cur.execute(
             """
-            SELECT candidate_id, canonical_name, disposition
-            FROM candidate WHERE star_id = %s AND candidate_id <> %s
-            ORDER BY canonical_name
+            SELECT DISTINCT ON (lower(canonical_name)) candidate_id, canonical_name, disposition
+            FROM candidate
+            WHERE star_id = ANY(%(sids)s) AND candidate_id <> ALL(%(cids)s)
+            ORDER BY lower(canonical_name), candidate_id
             """,
-            (star_id, cid),
+            {"cids": cids, "sids": sids},
         )
         siblings = cur.fetchall()
 
