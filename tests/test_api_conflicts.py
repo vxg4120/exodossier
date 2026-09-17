@@ -34,22 +34,32 @@ if not _db_reachable():
 client = TestClient(app)
 
 
-def test_stats_conflict_counts_match_report():
-    conflicts = client.get("/api/stats").json()["conflicts"]
-    assert conflicts["disposition"] == 3274
-    assert conflicts["disposition_dramatic"] == 3
-    assert conflicts["radius"] == 3611
-    assert conflicts["teff"] == 1083
+def _conflict_counts() -> dict:
+    return client.get("/api/stats").json()["conflicts"]
+
+
+def test_stats_conflict_counts_are_the_list_totals():
+    """The headline counts and the corpus they link to are the same query, so they agree — on
+    whatever graph the nightly rebuild produced (the numbers drift as the catalogs refresh)."""
+    counts = _conflict_counts()
+    for ctype in ("disposition", "radius", "teff"):
+        total = client.get("/api/conflicts", params={"type": ctype, "limit": 1}).json()["total"]
+        assert counts[ctype] == total > 0, ctype
+    assert 0 < counts["disposition_dramatic"] <= counts["disposition"]
 
 
 def test_disposition_list_puts_dramatic_first():
-    r = client.get("/api/conflicts", params={"type": "disposition", "limit": 5})
+    counts = _conflict_counts()
+    n_dramatic = counts["disposition_dramatic"]
+    r = client.get("/api/conflicts", params={"type": "disposition", "limit": n_dramatic + 2})
     assert r.status_code == 200
     body = r.json()
-    assert body["total"] == 3274
-    top3 = {row["target"] for row in body["rows"][:3]}
-    assert top3 == {"Kepler-1517 b", "Kepler-404 b", "TOI-1836 c"}
-    assert all(body["rows"][i]["dramatic"] for i in range(3))
+    assert body["total"] == counts["disposition"]
+    flags = [row["dramatic"] for row in body["rows"]]
+    assert flags == [True] * n_dramatic + [False] * (len(flags) - n_dramatic)
+    # the flagship FALSE POSITIVE vs CONFIRMED cases the product was built around
+    dramatic = {row["target"] for row in body["rows"][:n_dramatic]}
+    assert {"Kepler-1517 b", "Kepler-404 b", "TOI-1836 c"} <= dramatic
 
 
 def test_known_disposition_conflict_fp_vs_confirmed():
@@ -81,7 +91,7 @@ def test_teff_conflict_list_includes_trappist1_and_links_to_target():
     r = client.get("/api/conflicts", params={"type": "teff", "limit": 50})
     assert r.status_code == 200
     body = r.json()
-    assert body["total"] == 1083
+    assert body["total"] == _conflict_counts()["teff"]
     rows = {row["host"]: row for row in body["rows"]}
     assert "TRAPPIST-1" in rows  # the flagship Teff conflict is on page 1 (sorted by spread)
     trappist = rows["TRAPPIST-1"]
@@ -93,7 +103,7 @@ def test_teff_conflict_list_includes_trappist1_and_links_to_target():
 def test_radius_list_sorted_by_spread_desc_with_provenance():
     r = client.get("/api/conflicts", params={"type": "radius", "limit": 10})
     body = r.json()
-    assert body["total"] == 3611
+    assert body["total"] == _conflict_counts()["radius"]
     spreads = [row["spread_pct"] for row in body["rows"]]
     assert spreads == sorted(spreads, reverse=True)
     first = body["rows"][0]
@@ -104,7 +114,7 @@ def test_radius_list_sorted_by_spread_desc_with_provenance():
 def test_conflicts_pagination():
     p1 = client.get("/api/conflicts", params={"type": "radius", "limit": 5, "offset": 0}).json()
     p2 = client.get("/api/conflicts", params={"type": "radius", "limit": 5, "offset": 5}).json()
-    assert p1["total"] == p2["total"] == 3611
+    assert p1["total"] == p2["total"] == _conflict_counts()["radius"]
     ids1 = {r["candidate_id"] for r in p1["rows"]}
     ids2 = {r["candidate_id"] for r in p2["rows"]}
     assert ids1.isdisjoint(ids2)  # no overlap across pages
