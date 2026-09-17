@@ -1,7 +1,8 @@
 # Exo identity follow-up — source verification
 
 2026-09-17. Isolated branch `codex/audit-followup-20260917`, base `a7259d6`.
-Status: implementation and local verification complete; independent review pending.
+Status: implementation and local verification complete; final independent re-review pending.
+The initial review of `ba58354` found two P2 consistency gaps, both reproduced and fixed below.
 No production access, DB mutation, harvest, deployment, or external message was performed.
 
 ## Verified defect and corrected behavior
@@ -29,6 +30,9 @@ name has exactly one non-null TIC. Two non-null TICs never join; a null-TIC row 
 zero or multiple possible TIC anchors keeps its own star ID. Candidate identity is
 the guarded host group plus case-folded candidate name. Counts, lists, per-source
 ranges, dossier crosswalks/claims/siblings and MCP `target_conflicts` share that rule.
+Search expands host-name and host-identifier matches through this same guard while
+preserving candidate-level matching and exact/prefix/substring ranks, with candidate
+ID breaking equal rank/name ties.
 Page-scoped queries inspect **all** same-name hosts before deciding whether an
 anchor is unambiguous; limiting the page cannot hide a conflicting TIC.
 
@@ -47,7 +51,10 @@ one TIC are not independent astronomical proof of identity. Other identifiers an
 coordinates are not newly interpreted. Separate null-only hosts can now produce
 multiple rows with the same display name: preserving uncertainty is safer than an
 unsupported merge. Existing name-only lookup still selects the lowest matching
-candidate ID; ID and crosswalk links identify the separate dossiers precisely.
+candidate ID; numeric tokens still prefer candidate IDs, and an ambiguous alternate identifier
+still selects the lowest matching candidate. Crosswalk uniqueness includes source
+and owner, so alternate identifiers are not universally unique. This pre-existing
+resolver precedence is unchanged; no general identifier redesign is claimed.
 
 ## Local verification
 
@@ -77,8 +84,8 @@ DATABASE_URL='postgresql://exo_test@127.0.0.1:58945/exo_identity_test' \
 git diff --check
 ```
 
-Result: **31 passed in 4.59s**, ruff passed, diff whitespace check passed.
-This includes 18 conflict/dossier tests (9 new cases),10 existing normalization/
+Result: **40 passed in 4.95s**, ruff passed, diff whitespace check passed.
+This includes 27 conflict/dossier tests (18 new cases),10 existing normalization/
 clustering tests, and 3 existing resolver/report tests. The existing fixed-production-
 dataset HTTP/MCP suites were not run against synthetic data; MCP's shared
 `target_conflicts` query is directly covered, not its stdio transport.
@@ -98,26 +105,57 @@ git show a7259d6:api/queries.py > /tmp/codex-exo-identity-20260917/baseline_quer
   'postgresql://exo_test@127.0.0.1:58945/exo_identity_test' \
   /tmp/codex-exo-identity-20260917/baseline_queries.py baseline
 /Users/vgupta/Development/repos/exodossier/.venv/bin/python /tmp/exo_bench_run.py \
-  'postgresql://exo_test@127.0.0.1:58945/exo_identity_test' api/queries.py guarded-filtered
+  'postgresql://exo_test@127.0.0.1:58945/exo_identity_test' api/queries.py final-exact-guarded
 ```
 
 | Median local operation | Base | Final guarded source |
 |---|---:|---:|
-| Disposition page40 | 295ms | 324ms |
-| Radius page40 | 397ms | 442ms |
-| Teff page40 | 239ms | 367ms |
-| Disposition per-source page | 8.1ms | 4.1ms |
-| Radius per-source page | 8.3ms | 4.7ms |
-| Teff per-source page | 4.1ms | 4.7ms |
-| Catalog statistics | 578ms | 740ms |
+| Disposition page40 | 295ms | 327ms |
+| Radius page40 | 397ms | 451ms |
+| Teff page40 | 239ms | 375ms |
+| Disposition per-source page | 8.1ms | 4.2ms |
+| Radius per-source page | 8.3ms | 4.5ms |
+| Teff per-source page | 4.1ms | 4.1ms |
+| Catalog statistics | 578ms | 723ms |
 
 Totals stayed 15,534 disposition / 2,525 radius / 339 Teff in the synthetic graph,
-which has only unambiguous twins. Added guard work raises some full-graph timings;
-this is not a live benchmark or an uptime claim. An early 6.2s radius regression was
+which has only unambiguous twins. Added guard work raises some full-graph timings. The accepted local budget is a
+five-warm-sample median below 1 second for each 40-row conflict page; all three
+pass. Production-major query-plan verification remains an operator/release check.
+This is not a live benchmark or an uptime claim. An early 6.2s radius regression was
 rejected: EXPLAIN showed a 95x cardinality overestimate and >50 million join-filter
 comparisons. Window-based host anchors, scoped PK-led twin expansion, a materialized
 attribute filter before numeric regex, and a conflict-result boundary remove that
 plan without weakening identity rules. A scoped dossier check took 13ms.
+
+## Independent review fixes and semantic limits
+
+The read-only review of `a7259d6...ba58354` found two pre-existing gaps within the
+consistency acceptance criterion. Both were reproduced with disposable-DB tests:
+
+1. `search_targets` did not expand a candidate-less alias whose exact identifier
+   could resolve. It now expands host matches through the same guarded relation.
+   Exact alias search succeeds; an ambiguous alias cannot borrow foreign candidates.
+2. Dossier/MCP float arithmetic flagged exactly `1.17` versus `1.3` as a radius
+   conflict while SQL excluded the exact 10% threshold; Python accepted `+2`, which
+   SQL excluded. Both now use the existing SQL decimal grammar and exact strict
+   cross-multiplication. SQL compares numeric products; Python parses Decimal and
+   compares Fractions internally. Public JSON field types are unchanged.
+
+Numeric fixtures cover below/exact/above 10%, a difference beyond default Decimal
+context precision, leading plus, invalid text, NaN, Infinity and large finite
+scientific notation. All raw strings remain visible. Thresholds and source-count
+rules are unchanged; **flags/counts can change for previously inconsistent boundary
+values**. The near-above case `1.169999999999999999999999999999` versus `1.3` was also
+rounded out by the old SQL division; exact cross-multiplication correctly includes
+it. Leading-plus and nonfinite strings remain excluded from the numeric conflict
+vote under the established SQL grammar, and are now excluded consistently by MCP
+and dossiers. No scientific measurements are corrected or discarded.
+
+The initial review independently ran 10 pure tests, lint and diff checks; all passed.
+Its P3 measured-overhead observation is accepted with the explicit budget above.
+Artifacts: `/tmp/codex-exo-identity-20260917/verify.md` and `verify.log`.
+The private server was stopped after the final tests and benchmark.
 
 ## Remaining handoff
 

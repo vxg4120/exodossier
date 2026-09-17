@@ -44,6 +44,12 @@ sources on alternate IDs; stable canonical representative links; crosswalk/sibli
 - [x] Meaningful disposable-local-Postgres regression tests pass with explicit DSN,
   including conflicting alternate twins and empty/non-conflict cases. Document exact commands.
 - [x] Relevant existing tests pass; web build if frontend is changed.
+- [x] Exact and search lookup of candidate-less aliases use the guarded host group;
+  ambiguous aliases never borrow a foreign candidate. Candidate-level search ranking remains.
+- [x] Numeric parsing and strict threshold comparison match across SQL, dossier and MCP,
+  including exact/below/above threshold, leading plus, invalid and nonfinite raw claims.
+- [x] Median of five warm synthetic runs for each 40-row conflict page stays below 1s;
+  accept documented identity-safety overhead. Production-major planning remains a release check.
 - [ ] Independent read-only Codex verify covers `a7259d6...HEAD`; findings are verified
   before source/spec amendments. Final report separates tested source from live deployment.
 
@@ -54,7 +60,7 @@ sources on alternate IDs; stable canonical representative links; crosswalk/sibli
 
 ## Decision log & lessons learned
 - 2026-09-17 (prior review, to reproduce here) — Two same-name stars with TIC 111
-  andTIC 222 manufactured a Teff conflict and foreign siblings under lower(name) grouping.
+  and TIC 222 manufactured a Teff conflict and foreign siblings under lower(name) grouping.
 
 - 2026-09-17 (Codex implementation, verified with disposable fixtures) — A single TIC
   anchor preserves the established same-name null-TIC twin behavior; zero/multiple TIC
@@ -78,3 +84,16 @@ sources on alternate IDs; stable canonical representative links; crosswalk/sibli
   back to it. Host identifier lookup now expands through the same guarded group; an
   ambiguous null-TIC alias without its own candidate remains unresolved. Regression
   was reproduced before the fix and the final 31-test suite passes.
+- 2026-09-17 (independent Codex P2 findings, reproduced and fixed) — Search omitted
+  candidate-less aliases, and float/SQL numeric grammar differed at threshold boundaries.
+  Search now expands through guarded host groups. SQL and Python now use exact strict
+  cross-products with the established decimal grammar; raw claims and JSON types remain.
+  Below/exact/above and beyond-28-digit cases pass. Counts may change only where previous
+  numeric classification was inconsistent; scientific thresholds/source rules are unchanged.
+- 2026-09-17 (parent-reviewed P3 budget) — Accept measured guard overhead under a median
+  1s synthetic page-40 budget; final measured pages were 327/451/375 ms and statistics 723 ms.
+  Production-major planner verification remains an operator limitation, not a prerequisite
+  requiring paid infrastructure. The final local suite passes 40 tests.
+- 2026-09-17 (reviewed limitation) — Numeric candidate IDs take lookup precedence;
+  otherwise shared alternate identifiers select the lowest match. Crosswalk uniqueness is
+  scoped by source and owner, not global. This existing behavior is not redesigned here.

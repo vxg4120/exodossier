@@ -22,13 +22,16 @@ Disagreements are surfaced, never adjudicated.
 
 from __future__ import annotations
 
+import re
+from decimal import Decimal
+from fractions import Fraction
 from typing import Any
 
 import psycopg
 
 # A source_assertion.value is TEXT; only cast the ones that look numeric. Anchored, allows an
-# optional sign, a decimal point and scientific notation ("1e+04") — everything Postgres ::numeric
-# accepts and nothing it chokes on.
+# optional minus, a decimal point and scientific notation ("1e+04"). The dossier uses
+# this same grammar; nonfinite/unsupported forms stay visible as raw claims but do not vote.
 NUM_RE = r"^-?[0-9]+\.?[0-9]*([eE][-+]?[0-9]+)?$"
 
 # Canonical disposition taxonomy (mirrors db/migrations 0004/0005 seed).
@@ -95,12 +98,9 @@ CONFLICT_TYPES: dict[str, dict[str, Any]] = {
 # ---------------------------------------------------------------------------------------------
 # helpers
 # ---------------------------------------------------------------------------------------------
-def _num(value: str) -> float | None:
-    """Parse an assertion value to float, or None if it is not numeric."""
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None
+def _num(value: str) -> Decimal | None:
+    """Parse the same finite decimal grammar used by the SQL conflict queries."""
+    return Decimal(value) if re.fullmatch(NUM_RE, value) else None
 
 
 # Query-time identity guard; no graph rows or claims are rewritten. A unique TIC anchor
@@ -123,6 +123,8 @@ def _identity_cte(scope: str | None = None) -> str:
                         "WHERE c.candidate_id = ANY(%(ids)s)",
         "star_id": "SELECT lower(canonical_name) COLLATE \"C\" FROM star "
                    "WHERE star_id = ANY(%(ids)s)",
+        "search": "SELECT lower(s.canonical_name) COLLATE \"C\" FROM star s "
+                  "JOIN host_matches m ON m.star_id = s.star_id",
     }
     where = (f'WHERE lower(canonical_name) COLLATE "C" IN ({names[scope]})'
              if scope is not None else "")
@@ -222,7 +224,8 @@ def _numeric_conflict_cte(attr_level: str) -> str:
     conflicted AS MATERIALIZED (
         SELECT eid, mn, mx, n_sources, (mx - mn) / mx AS spread
         FROM agg
-        WHERE n_values >= 2 AND n_sources >= 2 AND mx > 0 AND (mx - mn) / mx > %(threshold)s
+        WHERE n_values >= 2 AND n_sources >= 2 AND mx > 0
+          AND mx - mn > mx * %(threshold)s::numeric
     )
     """
 
@@ -336,15 +339,25 @@ def search_targets(db: psycopg.Connection, q: str, limit: int = 50) -> list[dict
     """Resolve any TIC / TOI / CTOI / KOI / planet-name / host to candidate targets.
 
     A host match (star name or a star-level identifier like a TIC) expands to every candidate of
-    that star, so every result deep-links to a target. Exact matches rank first, then prefix, then
-    substring; ties break on name.
+    its guarded host group, so every result deep-links to a target. Exact matches rank first, then
+    prefix, then substring; ties break on name.
     """
     q = q.strip()
     if not q:
         return []
     params = {"ex": q, "prefix": q + "%", "like": "%" + q + "%", "limit": limit}
-    sql = """
-    WITH matches AS (
+    sql = f"""
+    WITH host_matches AS (
+        SELECT star_id, 2 AS rank FROM star WHERE canonical_name ILIKE %(like)s
+        UNION ALL
+        SELECT star_id,
+               CASE WHEN lower(id_value) = lower(%(ex)s) THEN 0
+                    WHEN id_value ILIKE %(prefix)s THEN 1 ELSE 2 END AS rank
+        FROM entity_identifier
+        WHERE star_id IS NOT NULL AND id_value ILIKE %(like)s
+    ),
+    {_identity_cte('search')},
+    matches AS (
         -- candidate canonical name
         SELECT c.candidate_id AS cid,
                CASE WHEN lower(c.canonical_name) = lower(%(ex)s) THEN 0
@@ -359,17 +372,13 @@ def search_targets(db: psycopg.Connection, q: str, limit: int = 50) -> list[dict
         FROM entity_identifier ei
         WHERE ei.candidate_id IS NOT NULL AND ei.id_value ILIKE %(like)s
         UNION ALL
-        -- host star name -> all its candidates
-        SELECT c.candidate_id AS cid, 2 AS rank
-        FROM candidate c JOIN star s ON s.star_id = c.star_id
-        WHERE s.canonical_name ILIKE %(like)s
-        UNION ALL
-        -- star-level identifier (tic / kic / gaia / hd / hip / name) -> all its candidates
-        SELECT c.candidate_id AS cid,
-               CASE WHEN lower(ei.id_value) = lower(%(ex)s) THEN 0
-                    WHEN ei.id_value ILIKE %(prefix)s THEN 1 ELSE 2 END AS rank
-        FROM entity_identifier ei JOIN candidate c ON c.star_id = ei.star_id
-        WHERE ei.star_id IS NOT NULL AND ei.id_value ILIKE %(like)s
+        -- Host matches expand through the same guard as exact lookup, including aliases
+        -- without candidates; an ambiguous null-TIC alias cannot borrow foreign candidates.
+        SELECT c.candidate_id AS cid, m.rank
+        FROM host_matches m
+        JOIN host_identity r ON r.star_id = m.star_id
+        JOIN host_identity t ON t.host_id = r.host_id
+        JOIN candidate c ON c.star_id = t.star_id
     ),
     best AS (SELECT cid, min(rank) AS rank FROM matches GROUP BY cid)
     SELECT c.candidate_id, c.canonical_name AS target, c.disposition,
@@ -377,7 +386,7 @@ def search_targets(db: psycopg.Connection, q: str, limit: int = 50) -> list[dict
     FROM best b
     JOIN candidate c ON c.candidate_id = b.cid
     JOIN star s ON s.star_id = c.star_id
-    ORDER BY b.rank, c.canonical_name
+    ORDER BY b.rank, c.canonical_name, c.candidate_id
     LIMIT %(limit)s
     """
     with db.cursor() as cur:
@@ -654,7 +663,7 @@ def _attribute_conflict(attr: str, meta: dict, items: list[dict]) -> bool:
     threshold = meta.get("threshold")
     if threshold is None:
         return False
-    by_source: dict[str, set[float]] = {}
+    by_source: dict[str, set[Decimal]] = {}
     for it in items:
         v = _num(it["value"])
         if v is not None:
@@ -663,7 +672,9 @@ def _attribute_conflict(attr: str, meta: dict, items: list[dict]) -> bool:
     if len(by_source) < 2 or len(values) < 2:
         return False
     mx = max(values)
-    return mx > 0 and (mx - min(values)) / mx > threshold
+    # Cross-multiply exactly, matching SQL numeric arithmetic. Fraction avoids both binary
+    # float rounding and Decimal's default context rounding at a strict threshold boundary.
+    return mx > 0 and Fraction(mx) - Fraction(min(values)) > Fraction(mx) * Fraction(str(threshold))
 
 
 # ---------------------------------------------------------------------------------------------

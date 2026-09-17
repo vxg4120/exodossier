@@ -10,6 +10,6 @@ Spec: `docs/specs/audit-followup-20260917.md`.
 - [ ] Record final source/test state and operator handoff; no deployment by Codex.
 
 ## Review
-Implementation and local verification complete:31 tests, ruff and diff checks pass.
+Implementation and local verification complete: 40 tests, ruff and diff checks pass.
 See `tasks/exo-followup-report.md` for baseline reproduction, identity tradeoffs,
-PG14 schema limitation and synthetic benchmark. Commit/independent review next; no deployment.
+PG14 schema limitation and synthetic benchmark. Initial review P2s reproduced and fixed; final re-review next; no deployment.

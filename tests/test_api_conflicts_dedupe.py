@@ -320,6 +320,7 @@ def test_same_name_hosts_keep_their_real_conflicts_and_list_dossier_mcp_agree(gr
             _claim(cur, run, "candidate_id", cid, "disposition", "Published Confirmed", "ps")
             _claim(cur, run, "candidate_id", cid, "disposition", "FALSE POSITIVE", "koi")
 
+    assert [r["candidate_id"] for r in queries.search_targets(graph, "Collision")] == cids
     for ctype in ("radius", "teff", "disposition"):
         page = queries.list_conflicts(graph, ctype, limit=100)
         assert page["total"] == len(page["rows"]) == 3
@@ -387,6 +388,9 @@ def test_star_claims_on_candidate_less_twin_still_link_to_group_target(graph):
     assert page["rows"][0]["candidate_id"] == first
     assert "teff_k" in queries.resolve_target(graph, first)["conflict_attributes"]
 
+    assert [r["candidate_id"] for r in queries.search_targets(
+        graph, "alias-without-candidate"
+    )] == [first]
     by_alias = queries.resolve_target(graph, "alias-without-candidate")
     assert by_alias is not None
     assert by_alias["candidate"]["candidate_id"] == first
@@ -446,5 +450,35 @@ def test_ambiguous_candidate_less_alias_identifier_does_not_resolve_foreign_targ
             "INSERT INTO entity_identifier (star_id, id_type, id_value, source) "
             "VALUES (%s, 'kic', 'ambiguous-alias', 'test')", (alias,),
         )
+    assert queries.search_targets(graph, "ambiguous-alias") == []
     assert queries.resolve_target(graph, "ambiguous-alias") is None
     assert queries.target_conflicts(graph, "ambiguous-alias") is None
+
+
+@pytest.mark.db
+@pytest.mark.parametrize(("lo", "hi", "expected"), [
+    ("1.17", "1.3", False),  # Exactly 10%: excluded by the strict scientific threshold.
+    ("1.170001", "1.3", False),
+    ("1.169999", "1.3", True),
+    ("1.169999999999999999999999999999", "1.3", True),
+    ("1", "+2", False),  # Keep the existing SQL numeric grammar; retain this raw claim.
+    ("1", "not-a-number", False),
+    ("1", "NaN", False),
+    ("1", "Infinity", False),
+    ("1e100", "2e100", True),
+])
+def test_numeric_grammar_and_strict_threshold_agree_across_surfaces(graph, lo, hi, expected):
+    with graph.cursor() as cur:
+        run = _run(cur)
+        sid = _star(cur, "Numeric boundary", 123456)
+        cid = _candidate(cur, sid, "Numeric boundary b")
+        for value, source in ((lo, "ps"), (hi, "koi")):
+            _claim(cur, run, "candidate_id", cid, "planet_radius_re", value, source)
+    page = queries.list_conflicts(graph, "radius")
+    assert queries.count_numeric_conflicts(graph, "radius") == page["total"] == int(expected)
+    assert len(page["rows"]) == int(expected)
+    dossier = queries.resolve_target(graph, cid)
+    group = next(g for g in dossier["attributes"] if g["attribute"] == "planet_radius_re")
+    assert group["conflict"] is expected
+    assert {a["value"] for a in group["assertions"]} == {lo, hi}
+    assert queries.target_conflicts(graph, cid)["has_conflict"] is expected
