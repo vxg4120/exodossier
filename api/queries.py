@@ -15,7 +15,8 @@ Conflict semantics (honest + reproducible against docs/reports/conflict_report.m
   * numeric (period/radius/teff/rstar/…) — a cross-source disagreement: >= 2 distinct values AND
     >= 2 distinct sources, with relative spread (max-min)/max over the attribute's threshold.
   * one row per planet / per host — the graph can carry twin rows for the same object (see
-    ``_IDENT_CTE``); the corpus and its headline counts dedupe on the identity the reader sees.
+    ``_IDENTITY``); the corpus, its headline counts and the target dossier all pool on the identity
+    the reader sees, so a row and the page it links to show the same disagreement.
 Disagreements are surfaced, never adjudicated.
 """
 
@@ -102,27 +103,51 @@ def _num(value: str) -> float | None:
         return None
 
 
-# One representative id per planet (candidate level) and per host (star level). The graph can
-# carry twin rows for the same object: identity.build pass 2 mints a KIC-only star for a Kepler
-# host whose coordinate match to its TIC star fails (``koi_new_star``), pass 3 then builds
-# KOI-keyed candidate twins of the planets already under the TIC star, and identity.assertions
-# attaches the Archive's per-name claims to both twins (KOI claims land on the KIC twin only).
-# The conflict corpus is one row per planet / per host *as the reader sees it* — host name plus
-# candidate name, or host name alone — so every twin maps to the lowest id of its identity group
-# and the twins' claims pool into that one row. Keyed by the assertion column each level joins on.
-_IDENT_CTE: dict[str, str] = {
+# The identity the reader sees. The graph can carry twin rows for the same object: identity.build
+# pass 2 mints a KIC-only star for a Kepler host whose coordinate match to its TIC star fails
+# (``koi_new_star``), pass 3 then builds KOI-keyed candidate twins of the planets already under the
+# TIC star, and identity.assertions attaches the Archive's per-name claims to both twins (KOI
+# claims land on the KIC twin only). The conflict corpus is one row per planet / per host *as the
+# reader sees it* — host name plus candidate name, or host name alone — so claims group on those
+# case-folded names, every row links to the lowest id in its group, and ``resolve_target`` pools
+# the same group. Byte-order collation on the keys: the names are ASCII catalog designations, and
+# the group sort is the hot path of every count (locale collation tripled it). Keyed by the
+# assertion column each level joins on: ``join`` attaches the names to ``source_assertion sa``,
+# ``key`` selects them, ``group`` groups on them.
+_IDENTITY: dict[str, dict[str, str]] = {
+    "candidate_id": {
+        "join": "JOIN candidate c ON c.candidate_id = sa.candidate_id "
+                "JOIN star s ON s.star_id = c.star_id",
+        "key": 'lower(s.canonical_name) COLLATE "C" AS host, '
+               'lower(c.canonical_name) COLLATE "C" AS name',
+        "group": "host, name",
+    },
+    "star_id": {
+        "join": "JOIN star s ON s.star_id = sa.star_id",
+        "key": 'lower(s.canonical_name) COLLATE "C" AS host',
+        "group": "host",
+    },
+}
+
+# ``twins(eid, <id>)``: the twin ids of a page's representative ids (``%(ids)s``), found from the
+# representatives by name so the per-source claims are then fetched through the (id, attribute)
+# index instead of by joining the whole graph.
+_TWINS_CTE: dict[str, str] = {
     "candidate_id": """
-    ident AS (
-        SELECT c.candidate_id,
-               min(c.candidate_id) OVER (
-                   PARTITION BY lower(s.canonical_name), lower(c.canonical_name)
-               ) AS eid
-        FROM candidate c JOIN star s ON s.star_id = c.star_id
+    twins AS (
+        SELECT r.candidate_id AS eid, t.candidate_id
+        FROM candidate r
+        JOIN star rs ON rs.star_id = r.star_id
+        JOIN star ts ON lower(ts.canonical_name) = lower(rs.canonical_name)
+        JOIN candidate t ON t.star_id = ts.star_id
+                        AND lower(t.canonical_name) = lower(r.canonical_name)
+        WHERE r.candidate_id = ANY(%(ids)s)
     )""",
     "star_id": """
-    ident AS (
-        SELECT star_id, min(star_id) OVER (PARTITION BY lower(canonical_name)) AS eid
-        FROM star
+    twins AS (
+        SELECT r.star_id AS eid, t.star_id
+        FROM star r JOIN star t ON lower(t.canonical_name) = lower(r.canonical_name)
+        WHERE r.star_id = ANY(%(ids)s)
     )""",
 }
 
@@ -131,23 +156,23 @@ def _numeric_conflict_cte(attr_level: str) -> str:
     """CTE ``conflicted(eid, mn, mx, spread, n_sources)`` for a numeric attribute.
 
     ``attr_level`` is a trusted internal literal ('candidate_id' or 'star_id'), never user input.
-    ``eid`` is the representative id of the planet / host (see ``_IDENT_CTE``). A conflict is a
-    genuine cross-source disagreement: >= 2 distinct values from >= 2 distinct sources, relative
-    spread over the caller's threshold.
+    Claims group on the planet's / host's identity (see ``_IDENTITY``); ``eid`` is the lowest id
+    in the group carrying the attribute. A conflict is a genuine cross-source disagreement: >= 2
+    distinct values from >= 2 distinct sources, relative spread over the caller's threshold.
     """
+    ident = _IDENTITY[attr_level]
     return f"""
-    WITH {_IDENT_CTE[attr_level]},
-    vals AS (
-        SELECT i.eid, (sa.value)::numeric AS v, sa.source
+    WITH vals AS (
+        SELECT {ident['key']}, sa.{attr_level} AS id, (sa.value)::numeric AS v, sa.source
         FROM source_assertion sa
-        JOIN ident i ON i.{attr_level} = sa.{attr_level}
+        {ident['join']}
         WHERE sa.attribute = %(attr)s
           AND sa.value ~ %(numre)s
     ),
     agg AS (
-        SELECT eid, min(v) AS mn, max(v) AS mx,
+        SELECT min(id) AS eid, min(v) AS mn, max(v) AS mx,
                count(DISTINCT v) AS n_values, count(DISTINCT source) AS n_sources
-        FROM vals GROUP BY eid
+        FROM vals GROUP BY {ident['group']}
     ),
     conflicted AS (
         SELECT eid, mn, mx, n_sources, (mx - mn) / mx AS spread
@@ -158,22 +183,22 @@ def _numeric_conflict_cte(attr_level: str) -> str:
 
 
 _DISPO_CTE = f"""
-    WITH {_IDENT_CTE['candidate_id']},
-    dispo AS (
-        SELECT i.eid, dm.canonical_disposition AS canon
+    WITH dispo AS (
+        SELECT {_IDENTITY['candidate_id']['key']}, sa.candidate_id AS id,
+               dm.canonical_disposition AS canon
         FROM source_assertion sa
-        JOIN ident i ON i.candidate_id = sa.candidate_id
+        {_IDENTITY['candidate_id']['join']}
         JOIN disposition_mapping dm
           ON dm.source = sa.source AND dm.source_value = sa.value
         WHERE sa.attribute = 'disposition'
     ),
     conflicted AS (
-        SELECT eid,
+        SELECT min(id) AS eid,
                array_agg(DISTINCT canon ORDER BY canon) AS dispositions,
                (bool_or(canon = 'FALSE_POSITIVE')
                 AND bool_or(canon IN ('CONFIRMED', 'KNOWN_PLANET'))) AS dramatic
         FROM dispo
-        GROUP BY eid
+        GROUP BY {_IDENTITY['candidate_id']['group']}
         HAVING count(DISTINCT canon) >= 2
     )
 """
@@ -647,23 +672,23 @@ def _list_disposition(db: psycopg.Connection, limit: int, offset: int) -> tuple[
 
 
 def _dispo_by_source(db: psycopg.Connection, candidate_ids: list[int]) -> dict[int, list[dict]]:
-    """Per-source canonical dispositions for the page's rows, keyed by the representative
-    candidate_id (twin candidates pool; see ``_IDENT_CTE``)."""
+    """Per-source canonical dispositions for the page's rows, keyed by the row's candidate_id
+    (twin candidates pool; see ``_TWINS_CTE``)."""
     if not candidate_ids:
         return {}
     with db.cursor() as cur:
         cur.execute(
             f"""
-            WITH {_IDENT_CTE['candidate_id']}
-            SELECT DISTINCT i.eid AS candidate_id, sa.source, dm.canonical_disposition AS canon
-            FROM source_assertion sa
-            JOIN ident i ON i.candidate_id = sa.candidate_id
+            WITH {_TWINS_CTE['candidate_id']}
+            SELECT DISTINCT t.eid AS candidate_id, sa.source, dm.canonical_disposition AS canon
+            FROM twins t
+            JOIN source_assertion sa
+              ON sa.candidate_id = t.candidate_id AND sa.attribute = 'disposition'
             JOIN disposition_mapping dm
               ON dm.source = sa.source AND dm.source_value = sa.value
-            WHERE sa.attribute = 'disposition' AND i.eid = ANY(%s)
             ORDER BY 1, 2
             """,
-            (candidate_ids,),
+            {"ids": candidate_ids},
         )
         out: dict[int, list[dict]] = {}
         for r in cur.fetchall():
@@ -744,28 +769,29 @@ def _numeric_by_source(
     db: psycopg.Connection, attr: str, page: list[dict], level_name: str
 ) -> dict[int, list[dict]]:
     """Per-source min/max/claim-count for the page's targets, keyed by candidate_id (the row key
-    the web table renders). Twin rows pool (see ``_IDENT_CTE``), so ``n`` counts distinct claims
+    the web table renders). Twin rows pool (see ``_TWINS_CTE``), so ``n`` counts distinct claims
     (value + citation) rather than rows — the same Archive row attached to two twins is one
     claim."""
     if not page:
         return {}
-    # For candidate-level, group over the planet's representative candidate_id; for star-level,
-    # group over the host's representative star_id then map to the candidate_id in the page.
+    # For candidate-level, group over the planet's row candidate_id; for star-level, group over
+    # the host's row star_id then map to the candidate_id in the page.
     if level_name == "candidate":
         ids = [r["candidate_id"] for r in page]
         with db.cursor() as cur:
             cur.execute(
                 f"""
-                WITH {_IDENT_CTE['candidate_id']}
-                SELECT i.eid, sa.source, min((sa.value)::numeric) AS mn,
+                WITH {_TWINS_CTE['candidate_id']}
+                SELECT t.eid, sa.source, min((sa.value)::numeric) AS mn,
                        max((sa.value)::numeric) AS mx,
                        count(DISTINCT (sa.value, sa.source_ref)) AS n
-                FROM source_assertion sa
-                JOIN ident i ON i.candidate_id = sa.candidate_id
-                WHERE sa.attribute = %s AND i.eid = ANY(%s) AND sa.value ~ %s
-                GROUP BY i.eid, sa.source ORDER BY i.eid, sa.source
+                FROM twins t
+                JOIN source_assertion sa
+                  ON sa.candidate_id = t.candidate_id AND sa.attribute = %(attr)s
+                WHERE sa.value ~ %(numre)s
+                GROUP BY t.eid, sa.source ORDER BY t.eid, sa.source
                 """,
-                (attr, ids, NUM_RE),
+                {"attr": attr, "ids": ids, "numre": NUM_RE},
             )
             per_eid: dict[int, list[dict]] = {}
             for r in cur.fetchall():
@@ -773,8 +799,7 @@ def _numeric_by_source(
                     {"source": r["source"], "min": _f(r["mn"]), "max": _f(r["mx"]), "n": r["n"]}
                 )
         return per_eid
-    # star-level: the page's candidate_id is the first candidate of the representative star, so
-    # its star_id is the host's representative id.
+    # star-level: the page's candidate_id is the first candidate of the row's star.
     cand_ids = [r["candidate_id"] for r in page]
     with db.cursor() as cur:
         cur.execute(
@@ -784,16 +809,16 @@ def _numeric_by_source(
         star_ids = list(set(star_of.values()))
         cur.execute(
             f"""
-            WITH {_IDENT_CTE['star_id']}
-            SELECT i.eid, sa.source, min((sa.value)::numeric) AS mn,
+            WITH {_TWINS_CTE['star_id']}
+            SELECT t.eid, sa.source, min((sa.value)::numeric) AS mn,
                    max((sa.value)::numeric) AS mx,
                    count(DISTINCT (sa.value, sa.source_ref)) AS n
-            FROM source_assertion sa
-            JOIN ident i ON i.star_id = sa.star_id
-            WHERE sa.attribute = %s AND i.eid = ANY(%s) AND sa.value ~ %s
-            GROUP BY i.eid, sa.source ORDER BY i.eid, sa.source
+            FROM twins t
+            JOIN source_assertion sa ON sa.star_id = t.star_id AND sa.attribute = %(attr)s
+            WHERE sa.value ~ %(numre)s
+            GROUP BY t.eid, sa.source ORDER BY t.eid, sa.source
             """,
-            (attr, star_ids, NUM_RE),
+            {"attr": attr, "ids": star_ids, "numre": NUM_RE},
         )
         per_star: dict[int, list[dict]] = {}
         for r in cur.fetchall():
