@@ -204,16 +204,28 @@ def catalog_stats(db: psycopg.Connection) -> dict[str, Any]:
             "teff": count_numeric_conflicts(db, "teff"),
         }
 
-        # Last run per catalog endpoint. Scope to the catalog sources that populate the identity
-        # graph ('exofop', 'nea'); the same ledger also carries the Wave-2 per-target MAST fetches
-        # (source 'mast'), which are not part of this surface and would flood the response.
+        # Last run per catalog endpoint, plus the last pull that actually landed rows: the 24h
+        # freshness gate ledgers a ``skipped_fresh`` row on every run inside the window, so the
+        # latest row alone can hide when the catalog was last pulled. Scope to the catalog sources
+        # that populate the identity graph ('exofop', 'nea'); the same ledger also carries the
+        # Wave-2 per-target MAST fetches (source 'mast'), which are not part of this surface and
+        # would flood the response.
         cur.execute(
             """
-            SELECT DISTINCT ON (source, endpoint)
-                source, endpoint, status, rows_ingested, bytes_downloaded, finished_at
-            FROM ingest_run
-            WHERE source IN ('exofop', 'nea')
-            ORDER BY source, endpoint, started_at DESC NULLS LAST
+            SELECT DISTINCT ON (ir.source, ir.endpoint)
+                ir.source, ir.endpoint, ir.status, ir.rows_ingested, ir.bytes_downloaded,
+                ir.finished_at,
+                ok.finished_at AS last_ok_at, ok.rows_ingested AS last_ok_rows
+            FROM ingest_run ir
+            LEFT JOIN LATERAL (
+                SELECT finished_at, rows_ingested
+                FROM ingest_run
+                WHERE source = ir.source AND endpoint = ir.endpoint AND status = 'ok'
+                ORDER BY started_at DESC NULLS LAST
+                LIMIT 1
+            ) ok ON true
+            WHERE ir.source IN ('exofop', 'nea')
+            ORDER BY ir.source, ir.endpoint, ir.started_at DESC NULLS LAST
             """
         )
         ingest_runs = cur.fetchall()

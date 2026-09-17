@@ -7,6 +7,9 @@ export interface IngestRun {
   rows_ingested: number | null;
   bytes_downloaded: number | null;
   finished_at: string | null;
+  /** The last pull that actually landed rows (a skipped_fresh check leaves these untouched). */
+  last_ok_at: string | null;
+  last_ok_rows: number | null;
 }
 
 export interface Stats {

@@ -103,7 +103,7 @@ export function Overview() {
               </Panel>
             </div>
 
-            <Panel title="Ingestion ledger" meta="last catalog pull per endpoint" flush>
+            <Panel title="Ingestion ledger" meta="last landed pull · latest check per endpoint" flush>
               <LedgerTable runs={s.ingest_runs} />
             </Panel>
           </>
@@ -113,6 +113,9 @@ export function Overview() {
   );
 }
 
+/** Rows and "Last pull" come from the last run that actually landed data; "State" and "Checked"
+    from the latest run, which inside the 24h freshness window is a skipped_fresh check that pulls
+    nothing — showing that run's zero rows alone made the puller look silently dead. */
 function LedgerTable({ runs }: { runs: IngestRun[] }) {
   return (
     <div className="table-wrap">
@@ -123,7 +126,8 @@ function LedgerTable({ runs }: { runs: IngestRun[] }) {
             <th>Endpoint</th>
             <th>State</th>
             <th className="is-num">Rows</th>
-            <th className="is-num">Last run</th>
+            <th className="is-num">Last pull</th>
+            <th className="is-num">Checked</th>
           </tr>
         </thead>
         <tbody>
@@ -139,7 +143,8 @@ function LedgerTable({ runs }: { runs: IngestRun[] }) {
                     {meta.label}
                   </span>
                 </td>
-                <td className="is-num num">{fmtInt(r.rows_ingested)}</td>
+                <td className="is-num num">{fmtInt(r.last_ok_rows)}</td>
+                <td className="is-num num">{fmtDate(r.last_ok_at)}</td>
                 <td className="is-num num">{fmtDate(r.finished_at)}</td>
               </tr>
             );

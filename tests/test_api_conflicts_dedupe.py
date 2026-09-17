@@ -12,6 +12,8 @@ Fixture tests run on an isolated graph (clean_graph: truncated + rolled back); t
 tests run against whatever graph DATABASE_URL points at.
 """
 
+import datetime as dt
+
 import pytest
 from psycopg.rows import dict_row
 
@@ -145,6 +147,29 @@ def test_teff_twin_hosts_are_one_row_and_one_count(graph):
     assert row["candidate_id"] == first  # links to a planet of the representative host row
     assert {s["source"] for s in row["by_source"]} == {"exofop_toi", "koi", "ps"}
     assert row["n_sources"] == 3
+
+
+@pytest.mark.db
+def test_ledger_reports_last_landed_pull_beside_latest_check(graph):
+    """A skipped_fresh check must not hide the last pull that landed rows."""
+    with graph.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO ingest_run
+                (source, endpoint, started_at, finished_at, rows_ingested, bytes_downloaded, status)
+            VALUES
+                ('exofop', 'audit_ep', now() - interval '2 days', now() - interval '2 days',
+                 8064, 3735481, 'ok'),
+                ('exofop', 'audit_ep', now(), now(), 0, 0, 'skipped_fresh')
+            """
+        )
+    runs = {(r["source"], r["endpoint"]): r for r in queries.catalog_stats(graph)["ingest_runs"]}
+    row = runs[("exofop", "audit_ep")]
+    assert (row["status"], row["rows_ingested"]) == ("skipped_fresh", 0)
+    assert row["last_ok_rows"] == 8064
+    assert dt.datetime.fromisoformat(row["last_ok_at"]) < dt.datetime.fromisoformat(
+        row["finished_at"]
+    )
 
 
 # --- consistency on whatever graph is present ---------------------------------------------------
