@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
-import { getStats } from "../api/client";
-import type { IngestRun } from "../api/types";
+import { getConflicts, getStats } from "../api/client";
+import type { ConflictRow, IngestRun } from "../api/types";
 import { useApi } from "../hooks/useApi";
 import { compact, fmtDate, fmtInt } from "../lib/format";
 import { CONFLICT_TABS } from "../lib/conflicts";
@@ -9,8 +9,12 @@ import { Panel } from "../components/Panel";
 import { StatTile } from "../components/StatTile";
 import { Async } from "../components/States";
 
+/** How many of the dramatic cases the panel lists (dramatic rows sort first in the corpus). */
+const DRAMATIC_SHOWN = 3;
+
 export function Overview() {
   const stats = useApi(() => getStats(), []);
+  const dramatic = useApi(() => getConflicts("disposition", DRAMATIC_SHOWN, 0), []);
 
   return (
     <div className="view fadein">
@@ -84,22 +88,20 @@ export function Overview() {
                 </div>
               </Panel>
 
-              <Panel title="The dramatic three" meta="FALSE POSITIVE vs CONFIRMED" dataTour="dramatic">
+              <Panel
+                title={`The dramatic ${fmtInt(s.conflicts.disposition_dramatic)}`}
+                meta="FALSE POSITIVE vs CONFIRMED"
+                dataTour="dramatic"
+              >
                 <p className="hint" style={{ marginBottom: 12 }}>
-                  Three candidates where one catalog calls it a false positive while another confirms
-                  it — the sharpest form of &ldquo;nobody agrees on a planet.&rdquo;
+                  Candidates where one catalog calls it a false positive while another confirms it
+                  — the sharpest form of &ldquo;nobody agrees on a planet.&rdquo;
                 </p>
-                <div className="stack stack--sm">
-                  {["Kepler-1517 b", "TOI-1836 c", "Kepler-404 b"].map((name) => (
-                    <Link key={name} to={`/target/${encodeURIComponent(name)}`} className="assert-line">
-                      <span className="assert-val mono-hi">{name}</span>
-                      <span className="badge badge--conflict">
-                        <span className="badge__glyph" aria-hidden="true" />
-                        FP vs CONFIRMED
-                      </span>
-                    </Link>
-                  ))}
-                </div>
+                <Async state={dramatic} loadingLabel="Loading the dramatic cases">
+                  {(page) => (
+                    <DramaticList rows={page.rows} total={s.conflicts.disposition_dramatic} />
+                  )}
+                </Async>
               </Panel>
             </div>
 
@@ -109,6 +111,35 @@ export function Overview() {
           </>
         )}
       </Async>
+    </div>
+  );
+}
+
+/** The first dramatic rows of the disposition corpus (they sort first), with the way to the rest
+    when the live count outruns the panel. */
+function DramaticList({ rows, total }: { rows: ConflictRow[]; total: number }) {
+  const shown = rows.filter((r) => r.dramatic);
+  if (shown.length === 0) {
+    return <p className="hint">No FALSE POSITIVE vs CONFIRMED case in the current graph.</p>;
+  }
+  return (
+    <div className="stack stack--sm">
+      {shown.map((r) => (
+        <Link key={r.candidate_id} to={`/target/${r.candidate_id}`} className="assert-line">
+          <span className="assert-val mono-hi">{r.target}</span>
+          <span className="badge badge--conflict">
+            <span className="badge__glyph" aria-hidden="true" />
+            FP vs CONFIRMED
+          </span>
+        </Link>
+      ))}
+      {total > shown.length ? (
+        <Link to="/conflicts?tab=disposition" className="assert-line">
+          <span className="assert-val hint">
+            all {fmtInt(total)} in the conflict corpus →
+          </span>
+        </Link>
+      ) : null}
     </div>
   );
 }
