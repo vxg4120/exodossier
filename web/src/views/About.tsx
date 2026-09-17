@@ -1,10 +1,13 @@
-import { getAttribution } from "../api/client";
+import { getAttribution, getStats } from "../api/client";
 import { useApi } from "../hooks/useApi";
+import { fmtInt } from "../lib/format";
 import { Panel } from "../components/Panel";
 import { Async } from "../components/States";
 
 export function About() {
   const attribution = useApi(() => getAttribution(), []);
+  const stats = useApi(() => getStats(), []);
+  const live = stats.data?.conflicts;
 
   return (
     <div className="view fadein">
@@ -57,9 +60,18 @@ export function About() {
             ranges are preserved so a Gaia radius revision reads as the real revision it is.
           </p>
           <p>
-            Counts are recomputed live from the graph and track the published v0 conflict report:
-            3,274 disposition conflicts (3 of the dramatic kind), 1,083 host-Teff conflicts, and
-            thousands of radius disagreements.
+            Counts are recomputed live from the graph, so they drift as the catalogs refresh
+            {live ? (
+              <>
+                {" "}— at last load <span className="num">{fmtInt(live.disposition)}</span>{" "}
+                disposition conflicts (<span className="num">{live.disposition_dramatic}</span> of
+                the dramatic kind), <span className="num">{fmtInt(live.teff)}</span> host-Teff and{" "}
+                <span className="num">{fmtInt(live.radius)}</span> radius conflicts
+              </>
+            ) : null}
+            . The frozen v0 conflict report (generated 2026-07-15) recorded 3,274 disposition
+            conflicts (3 dramatic), 1,083 host-Teff and 3,611 radius conflicts; those figures are
+            that snapshot&rsquo;s baseline, not the live count.
           </p>
         </div>
       </Panel>
