@@ -13,6 +13,7 @@ const Target = lazy(() => import("./views/Target").then((m) => ({ default: m.Tar
 const Conflicts = lazy(() => import("./views/Conflicts").then((m) => ({ default: m.Conflicts })));
 const FollowUp = lazy(() => import("./views/FollowUp").then((m) => ({ default: m.FollowUp })));
 const About = lazy(() => import("./views/About").then((m) => ({ default: m.About })));
+const NotFound = lazy(() => import("./views/NotFound").then((m) => ({ default: m.NotFound })));
 
 const NAV = [
   { to: "/", idx: "00", name: "Overview", end: true },
@@ -106,12 +107,13 @@ export default function App() {
           <span className="label">Provenance</span>
           <div className="srckey">
             <SourceBadge source="exofop_toi" />
+            <SourceBadge source="exofop_ctoi" />
             <SourceBadge source="nea_toi" />
             <SourceBadge source="ps" />
             <SourceBadge source="pscomppars" />
             <SourceBadge source="koi" />
           </div>
-          <span className="hint">{MOCK ? "Fixtures — API offline" : "Proxy → :8700"}</span>
+          {MOCK ? <span className="hint">Fixtures — API offline</span> : null}
         </div>
       </nav>
 
@@ -124,6 +126,7 @@ export default function App() {
             <Route path="/conflicts" element={<Conflicts />} />
             <Route path="/followup" element={<FollowUp />} />
             <Route path="/about" element={<About />} />
+            <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>
       </main>
