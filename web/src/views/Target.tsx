@@ -1,9 +1,10 @@
 import { useMemo } from "react";
 import { Link, useParams } from "react-router-dom";
 import { getTarget } from "../api/client";
-import type { Identifier, TargetDetail } from "../api/types";
+import type { Identifier, Sibling, TargetDetail } from "../api/types";
 import { useApi } from "../hooks/useApi";
 import { fmtNum } from "../lib/format";
+import { dispositionMeta } from "../lib/dispositions";
 import { Panel } from "../components/Panel";
 import { DispositionBadge } from "../components/DispositionBadge";
 import { SourceBadge } from "../components/SourceBadge";
@@ -18,6 +19,19 @@ function groupBySource(ids: Identifier[]): [string, Identifier[]][] {
     map.set(it.source, arr);
   }
   return Array.from(map.entries());
+}
+
+/** "6 confirmed" / "3 confirmed · 2 candidate · 1 false positive" — the siblings summarized by
+    their own dispositions, so a system of confirmed planets is never labeled "candidates". */
+function siblingSummary(siblings: Sibling[]): string {
+  const counts = new Map<string, number>();
+  for (const s of siblings) {
+    const label = s.disposition ? dispositionMeta(s.disposition).label.toLowerCase() : "undispositioned";
+    counts.set(label, (counts.get(label) ?? 0) + 1);
+  }
+  return Array.from(counts.entries())
+    .map(([label, n]) => `${n} ${label}`)
+    .join(" · ");
 }
 
 export function Target() {
@@ -125,9 +139,7 @@ function TargetCard({ detail }: { detail: TargetDetail }) {
       {detail.sibling_candidates.length > 0 ? (
         <Panel
           title="Others in this system"
-          meta={`${detail.sibling_candidates.length} sibling candidate${
-            detail.sibling_candidates.length === 1 ? "" : "s"
-          }`}
+          meta={siblingSummary(detail.sibling_candidates)}
           flush
         >
           {detail.sibling_candidates.map((s) => (

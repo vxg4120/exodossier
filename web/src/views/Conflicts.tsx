@@ -110,15 +110,20 @@ function BySourceDispositions({ rows }: { rows: BySourceDisposition[] }) {
 function BySourceRanges({ rows }: { rows: BySourceRange[] }) {
   return (
     <div className="bysrc">
-      {rows.map((b, i) => (
-        <span className="bysrc__item" key={`${b.source}-${i}`}>
-          <span className="bysrc__src">{b.source}</span>
-          <span className="bysrc__v">
-            {b.min === b.max ? fmtNum(b.min) : `${fmtNum(b.min)}–${fmtNum(b.max)}`}
-            {b.n > 1 ? ` (${b.n})` : ""}
+      {rows.map((b, i) => {
+        // Compare the rendered figures: values that agree at display precision are one value.
+        const lo = fmtNum(b.min);
+        const hi = fmtNum(b.max);
+        return (
+          <span className="bysrc__item" key={`${b.source}-${i}`}>
+            <span className="bysrc__src">{b.source}</span>
+            <span className="bysrc__v">
+              {lo === hi ? lo : `${lo}–${hi}`}
+              {b.n > 1 ? ` (${b.n})` : ""}
+            </span>
           </span>
-        </span>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -133,7 +138,7 @@ const DISPOSITION_COLS: Column<ConflictRow>[] = [
   },
   {
     key: "kind",
-    header: "",
+    header: "Flag",
     render: (r) =>
       r.dramatic ? (
         <span className="badge badge--conflict">

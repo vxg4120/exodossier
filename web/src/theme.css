@@ -1061,6 +1061,9 @@ button {
 .claims__unit {
   color: var(--ink-faint);
   font-size: var(--fs-micro);
+  /* units keep their case (K, R⊕, days, BJD) under the uppercase attribute name */
+  text-transform: none;
+  letter-spacing: 0;
 }
 .claim {
   display: flex;

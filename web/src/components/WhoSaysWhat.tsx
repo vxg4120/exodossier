@@ -1,6 +1,7 @@
 import type { Assertion, AttributeGroup } from "../api/types";
 import { fmtNum, fmtValue } from "../lib/format";
 import { dispositionMeta } from "../lib/dispositions";
+import { attributeLabel, unitLabel } from "../lib/attributes";
 import { SourceBadge } from "./SourceBadge";
 
 /* The who-says-what table: one row per attribute, every source's claim side by side, with the
@@ -54,24 +55,29 @@ function ClaimValue({ claim, kind }: { claim: SourceClaim; kind: string }) {
     );
   }
   if (claim.numericMin === null) return <span className="dash">—</span>;
-  if (claim.numericMin === claim.numericMax) {
-    return <span className="claim__val">{fmtNum(claim.numericMin)}</span>;
+  // Compare the rendered figures, not the raw values: two publications 0.05% apart still read as
+  // one value at display precision, and "8.74 – 8.74" is a non-range.
+  const lo = fmtNum(claim.numericMin);
+  const hi = fmtNum(claim.numericMax);
+  if (lo === hi) {
+    return <span className="claim__val">{lo}</span>;
   }
   return (
     <span className="claim__val">
-      {fmtNum(claim.numericMin)} – {fmtNum(claim.numericMax)}
+      {lo} – {hi}
     </span>
   );
 }
 
 function AttributeRow({ group }: { group: AttributeGroup }) {
   const claims = summarize(group.assertions);
+  const unit = unitLabel(group.unit);
   return (
     <tr className={group.conflict ? "is-conflict" : undefined}>
-      <th className="claims__attr" scope="row">
-        {group.attribute}
+      <th className="claims__attr" scope="row" title={group.attribute}>
+        {attributeLabel(group.attribute)}
         {group.conflict ? <span className="claims__flag" title="sources disagree" /> : null}
-        {group.unit ? <div className="claims__unit">{group.unit}</div> : null}
+        {unit ? <div className="claims__unit">{unit}</div> : null}
       </th>
       <td>
         <span className="claims__resolved">{fmtValue(group.resolved)}</span>
