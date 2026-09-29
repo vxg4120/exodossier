@@ -172,8 +172,8 @@ _PSCOMPPARS_COLS = [
 
 
 def _coerce(kind: str, value: str | None):
-    """Coerce one CSV cell to its column type. Un-coercible typed values degrade to NULL (logged)
-    so a single bad cell never aborts a bulk load.
+    """Coerce one CSV cell to its column type. Un-coercible typed values degrade to NULL so a
+    single bad cell never aborts a bulk load; parse_rows counts and reports them.
 
     kind 'tic' strips the Archive's "TIC " prefix (the ps/pscomppars tic_id column ships as
     "TIC 158722002", not a bare integer) before parsing the digits.
@@ -190,7 +190,6 @@ def _coerce(kind: str, value: str | None):
         if kind == "num":
             return float(value)
     except ValueError:
-        logger.warning("dropping unparseable %s cell %r -> NULL", kind, value)
         return None
     return value
 
@@ -213,10 +212,22 @@ def parse_rows(text: str, colmap: list[tuple[str, str, str]]) -> list[dict]:
         if header.lower() in header_lookup
     ]
     rows = []
+    dropped: dict[str, list] = {}  # source column -> [count, kind, first value]
     for raw_row in reader:
-        typed = {typed_col: _coerce(kind, raw_row.get(src)) for typed_col, src, kind in plan}
+        typed = {}
+        for typed_col, src, kind in plan:
+            cell = (raw_row.get(src) or "").strip()
+            typed[typed_col] = value = _coerce(kind, cell)
+            if value is None and cell:
+                dropped.setdefault(src, [0, kind, cell])[0] += 1
         typed["extra"] = {k: v for k, v in raw_row.items() if k is not None}
         rows.append(typed)
+    # One line per column, not per cell: the TOI list's sexagesimal RA/Dec once wrote 16,296
+    # lines into every nightly log, and its rotation then kept about ten days of history.
+    for src, (count, kind, example) in dropped.items():
+        logger.warning(
+            "dropping %d unparseable %s cells in %s -> NULL (e.g. %r)", count, kind, src, example
+        )
     return rows
 
 

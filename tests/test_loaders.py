@@ -49,3 +49,25 @@ def test_tic_coercion_direct():
 def test_tap_error_payload_raises():
     with pytest.raises(ValueError, match="non-CSV error"):
         loaders.parse_rows("ERROR\nORA-00904: invalid identifier\n", loaders._PS_COLS)
+
+
+_TOI_SEXAGESIMAL_CSV = (
+    "TIC ID,TOI,RA,Dec\n"
+    "231663901,101.01,21:14:56.88,-55:52:18.71\n"
+    "12345,900.01,05:48:33.56,+12:01:02.3\n"
+    "67890,901.01,,\n"
+)
+
+
+def test_unparseable_cells_log_once_per_column_not_once_per_cell(caplog):
+    """The TOI list ships RA/Dec as sexagesimal strings, which stay NULL by design (a TOI joins
+    its star by TIC). One warning per cell wrote 16,296 lines into every nightly log, so its
+    10 MB rotation kept only about ten days of the nightly's failure record."""
+    with caplog.at_level("WARNING", logger="ingest.loaders"):
+        rows = loaders.parse_rows(_TOI_SEXAGESIMAL_CSV, loaders._EXOFOP_TOI_COLS)
+    assert [(r["ra_deg"], r["dec_deg"]) for r in rows] == [(None, None)] * 3
+    warnings = [r.getMessage() for r in caplog.records]
+    assert warnings == [
+        "dropping 2 unparseable num cells in RA -> NULL (e.g. '21:14:56.88')",
+        "dropping 2 unparseable num cells in Dec -> NULL (e.g. '-55:52:18.71')",
+    ]
