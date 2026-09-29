@@ -22,6 +22,7 @@ Disagreements are surfaced, never adjudicated.
 
 from __future__ import annotations
 
+import html
 import re
 from decimal import Decimal
 from fractions import Fraction
@@ -972,10 +973,14 @@ def _iso_row(row: dict) -> dict:
 
 
 def _clean_ref(ref: str | None) -> str | None:
-    """The ps ``source_ref`` ships an HTML <a> tag; pull out the human citation text."""
+    """The ps ``source_ref`` ships an HTML <a> tag; pull out the human citation text.
+
+    The text inside the tag is HTML too, so entities come through as written: "Gajdo&scaron;
+    et al. 2019", "Fulton &amp;amp; Petigura 2018". Decode them after the tags are gone, so a
+    decoded "&lt;" can never be mistaken for a tag."""
     if not ref:
         return ref
     import re
 
-    text = re.sub(r"<[^>]+>", "", ref).strip()
+    text = html.unescape(re.sub(r"<[^>]+>", "", ref)).strip()
     return text or None
