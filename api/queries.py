@@ -976,7 +976,7 @@ def _clean_ref(ref: str | None) -> str | None:
     """The ps ``source_ref`` ships an HTML <a> tag; pull out the human citation text.
 
     The text inside the tag is HTML too, so entities come through as written: "Gajdo&scaron;
-    et al. 2019", "Fulton &amp;amp; Petigura 2018". Decode them after the tags are gone, so a
+    et al. 2019", "Fulton &amp; Petigura 2018". Decode them once, after the tags are gone, so a
     decoded "&lt;" can never be mistaken for a tag."""
     if not ref:
         return ref
