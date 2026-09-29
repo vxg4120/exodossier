@@ -296,7 +296,15 @@ def _congestion_heavy(db: psycopg.Connection) -> dict:
         if entry is not None:
             if time.monotonic() - entry[0] >= CONGESTION_TTL_S and not _heavy_refreshing:
                 _heavy_refreshing = True
-                threading.Thread(target=_refresh_congestion_heavy, daemon=True).start()
+                try:
+                    threading.Thread(target=_refresh_congestion_heavy, daemon=True).start()
+                except Exception:
+                    # The flag would otherwise stay set with no thread to clear it, and no
+                    # later request would ever refresh again.
+                    _heavy_refreshing = False
+                    log.exception(
+                        "could not start the congestion refresh; serving the previous numbers"
+                    )
             return entry[1]
     with _heavy_cold:
         with _heavy_state:

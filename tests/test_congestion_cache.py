@@ -146,3 +146,33 @@ def test_concurrent_cold_requests_run_the_scan_once():
         t.join()
     assert _scans(*conns) == 1
     assert [r["leo_objects"] for r in results] == [10, 10, 10, 10]
+
+
+def test_a_refresh_thread_that_fails_to_start_does_not_disable_refreshes(monkeypatch):
+    import types
+
+    twoskies.congestion_astronomy(_FakeConn(bins=BINS_A))
+
+    class _Unstartable:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def start(self):
+            raise RuntimeError("can't start new thread")
+
+    real_threading = twoskies.threading
+    monkeypatch.setattr(twoskies, "CONGESTION_TTL_S", 0.0)
+    monkeypatch.setattr(twoskies, "threading", types.SimpleNamespace(Thread=_Unstartable))
+    assert twoskies.congestion_astronomy(_FakeConn())["leo_objects"] == 10  # stale, no error
+    assert twoskies._heavy_refreshing is False
+
+    refresh_conn = _FakeConn(bins=BINS_B)
+
+    def fake_oei_db():
+        yield refresh_conn
+
+    monkeypatch.setattr(twoskies, "threading", real_threading)
+    monkeypatch.setattr(twoskies, "get_oei_db", fake_oei_db)
+    twoskies.congestion_astronomy(_FakeConn())  # a later request retries the refresh
+    _wait_for_refresh()
+    assert _scans(refresh_conn) == 1
