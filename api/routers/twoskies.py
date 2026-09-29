@@ -242,6 +242,16 @@ LIMIT 8
 """
 
 
+# The panel's numbers move only when the nightly refresh lands new element sets (07:10 and 19:10
+# UTC), but computing them costs 12 to 15 s: the latest-element scan reads the whole celestrak_gp
+# slice of gp_elements, which grows with every pull. Every Follow-up load was paying that. The
+# response takes no parameters, so it is memoized whole; the lock makes concurrent cold requests
+# wait for one computation instead of each running the scan.
+CONGESTION_TTL_S = 6 * 3600.0
+_congestion_cached: tuple[float, dict] | None = None  # (monotonic time computed, response)
+_congestion_lock = threading.Lock()
+
+
 @router.get("/congestion-astronomy")
 def congestion_astronomy(db: Annotated[psycopg.Connection, Depends(get_oei_db)]):
     """The 'sky is getting crowded' panel: catalog-scale numbers + LEO shell density + operators.
@@ -250,6 +260,17 @@ def congestion_astronomy(db: Annotated[psycopg.Connection, Depends(get_oei_db)])
     the satellite ``oei`` catalog (read-only). The altitude x inclination bins are a catalog-density
     proxy; shells roll them up into ~200 km bands. This is catalog density, not conjunction data.
     """
+    global _congestion_cached
+    with _congestion_lock:
+        now = time.monotonic()
+        if _congestion_cached is not None and now - _congestion_cached[0] < CONGESTION_TTL_S:
+            return _congestion_cached[1]
+        response = _compute_congestion_astronomy(db)
+        _congestion_cached = (time.monotonic(), response)
+        return response
+
+
+def _compute_congestion_astronomy(db: psycopg.Connection) -> dict:
     with db.cursor() as cur:
         cur.execute(_CONGESTION_SQL)
         bins = cur.fetchall()
