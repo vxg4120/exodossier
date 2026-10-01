@@ -34,6 +34,7 @@ import math
 import threading
 import time
 from collections import Counter
+from contextlib import contextmanager
 from typing import Annotated
 
 import numpy as np
@@ -218,11 +219,20 @@ GROUP BY 1, 2
 ORDER BY 1, 2
 """
 
-_ASTRO_SUMMARY_SQL = """
+# Split by what moves the numbers. The latest-element scan and the tracked count read the whole
+# celestrak_gp slice of gp_elements, which grows with every pull (12 to 15 s together on prod), and
+# only an ingest changes them. The catalog total and the launch windows are cheap counts over
+# satellite, and the windows roll over at midnight with no ingest at all. So only the first group
+# is cached, and the second is read fresh on every request.
+_TRACKED_SQL = """
+SELECT count(DISTINCT norad_id) AS tracked_with_elements
+FROM gp_elements
+WHERE source = 'celestrak_gp'
+"""
+
+_LAUNCH_WINDOWS_SQL = """
 SELECT
     (SELECT count(*)                 FROM satellite) AS catalog_objects,
-    (SELECT count(DISTINCT norad_id) FROM gp_elements
-        WHERE source = 'celestrak_gp') AS tracked_with_elements,
     (SELECT count(*) FROM satellite
         WHERE object_type = 'PAYLOAD' AND launch_date > current_date - 365) AS payloads_launched_1y,
     (SELECT count(*) FROM satellite
@@ -241,6 +251,15 @@ ORDER BY count(*) DESC, o.canonical_name
 LIMIT 8
 """
 
+# The ingest-driven half, cached. Past its TTL it keeps being served while one background thread
+# recomputes it on its own connection, so no visitor waits on the scan except the very first
+# request after the process starts, and concurrent first requests wait for that one computation.
+CONGESTION_TTL_S = 1800.0
+_heavy_cached: tuple[float, dict] | None = None  # (monotonic time computed, cached half)
+_heavy_refreshing = False
+_heavy_state = threading.Lock()  # guards the two globals above; never held across a query
+_heavy_cold = threading.Lock()  # single-flight for the first computation
+
 
 @router.get("/congestion-astronomy")
 def congestion_astronomy(db: Annotated[psycopg.Connection, Depends(get_oei_db)]):
@@ -250,11 +269,73 @@ def congestion_astronomy(db: Annotated[psycopg.Connection, Depends(get_oei_db)])
     the satellite ``oei`` catalog (read-only). The altitude x inclination bins are a catalog-density
     proxy; shells roll them up into ~200 km bands. This is catalog density, not conjunction data.
     """
+    heavy = _congestion_heavy(db)
+    with db.cursor() as cur:
+        cur.execute(_LAUNCH_WINDOWS_SQL)
+        windows = cur.fetchone()
+    return {
+        "catalog_objects": windows["catalog_objects"],
+        "tracked_with_elements": heavy["tracked_with_elements"],
+        "leo_objects": heavy["leo_objects"],
+        "payloads_launched_1y": windows["payloads_launched_1y"],
+        "payloads_launched_30d": windows["payloads_launched_30d"],
+        "top_operators": heavy["top_operators"],
+        "shells": heavy["shells"],
+        "peak_bin": heavy["peak_bin"],
+        "bins": heavy["bins"],
+        "caveats": CAVEATS,
+        "note": "IAU Centre for the Protection of the Dark and Quiet Sky from Satellite "
+        "Constellation Interference (IAU CPS) coordinates the community response to this issue.",
+    }
+
+
+def _congestion_heavy(db: psycopg.Connection) -> dict:
+    global _heavy_cached, _heavy_refreshing
+    with _heavy_state:
+        entry = _heavy_cached
+        if entry is not None:
+            if time.monotonic() - entry[0] >= CONGESTION_TTL_S and not _heavy_refreshing:
+                _heavy_refreshing = True
+                try:
+                    threading.Thread(target=_refresh_congestion_heavy, daemon=True).start()
+                except Exception:
+                    # The flag would otherwise stay set with no thread to clear it, and no
+                    # later request would ever refresh again.
+                    _heavy_refreshing = False
+                    log.exception(
+                        "could not start the congestion refresh; serving the previous numbers"
+                    )
+            return entry[1]
+    with _heavy_cold:
+        with _heavy_state:
+            if _heavy_cached is not None:
+                return _heavy_cached[1]
+        heavy = _compute_congestion_heavy(db)
+        with _heavy_state:
+            _heavy_cached = (time.monotonic(), heavy)
+        return heavy
+
+
+def _refresh_congestion_heavy() -> None:
+    global _heavy_cached, _heavy_refreshing
+    try:
+        with contextmanager(get_oei_db)() as conn:
+            heavy = _compute_congestion_heavy(conn)
+        with _heavy_state:
+            _heavy_cached = (time.monotonic(), heavy)
+    except Exception:
+        log.exception("congestion refresh failed; the previous numbers stay in service")
+    finally:
+        with _heavy_state:
+            _heavy_refreshing = False
+
+
+def _compute_congestion_heavy(db: psycopg.Connection) -> dict:
     with db.cursor() as cur:
         cur.execute(_CONGESTION_SQL)
         bins = cur.fetchall()
-        cur.execute(_ASTRO_SUMMARY_SQL)
-        summary = cur.fetchone()
+        cur.execute(_TRACKED_SQL)
+        tracked = cur.fetchone()
         cur.execute(_TOP_OPERATORS_SQL)
         top_operators = cur.fetchall()
 
@@ -275,18 +356,12 @@ def congestion_astronomy(db: Annotated[psycopg.Connection, Depends(get_oei_db)])
     ]
 
     return {
-        "catalog_objects": summary["catalog_objects"],
-        "tracked_with_elements": summary["tracked_with_elements"],
+        "tracked_with_elements": tracked["tracked_with_elements"],
         "leo_objects": leo_objects,
-        "payloads_launched_1y": summary["payloads_launched_1y"],
-        "payloads_launched_30d": summary["payloads_launched_30d"],
         "top_operators": top_operators,
         "shells": shell_rows,
         "peak_bin": peak,
         "bins": bins,
-        "caveats": CAVEATS,
-        "note": "IAU Centre for the Protection of the Dark and Quiet Sky from Satellite "
-        "Constellation Interference (IAU CPS) coordinates the community response to this issue.",
     }
 
 
