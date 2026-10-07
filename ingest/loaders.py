@@ -113,7 +113,7 @@ _KOI_COLS = [
     ("duration_hr", "koi_duration", "num"),
     ("depth_ppm", "koi_depth", "num"),
     ("planet_radius_re", "koi_prad", "num"),
-    ("epoch_bjd", "koi_time0bk", "num"),
+    ("epoch_bjd", "koi_time0bk", "bkjd"),  # BKJD: BJD - 2454833.0, converted on load
     ("teff_k", "koi_steff", "num"),
     ("logg", "koi_slogg", "num"),
     ("rstar_rsun", "koi_srad", "num"),
@@ -171,6 +171,9 @@ _PSCOMPPARS_COLS = [
 ]
 
 
+BKJD_OFFSET = 2454833.0
+
+
 def _coerce(kind: str, value: str | None):
     """Coerce one CSV cell to its column type. Un-coercible typed values degrade to NULL so a
     single bad cell never aborts a bulk load; parse_rows counts and reports them.
@@ -189,6 +192,10 @@ def _coerce(kind: str, value: str | None):
             return int(float(value))  # tolerate '12345.0'
         if kind == "num":
             return float(value)
+        if kind == "bkjd":
+            # The Kepler KOI table gives transit epochs in BKJD (BJD - 2454833.0); every other
+            # source, and the epoch_bjd column itself, is plain BJD.
+            return float(value) + BKJD_OFFSET
     except ValueError:
         return None
     return value
