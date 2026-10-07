@@ -71,3 +71,13 @@ def test_unparseable_cells_log_once_per_column_not_once_per_cell(caplog):
         "dropping 2 unparseable num cells in RA -> NULL (e.g. '21:14:56.88')",
         "dropping 2 unparseable num cells in Dec -> NULL (e.g. '-55:52:18.71')",
     ]
+
+
+def test_koi_epoch_is_converted_from_bkjd_to_bjd():
+    """The KOI table gives koi_time0bk in BKJD (BJD - 2454833.0). Loaded raw, Kepler-1999 b's
+    epoch read 136.58 next to PS's 2454969.58 under the same BJD label."""
+    assert loaders._coerce("bkjd", "136.5829") == pytest.approx(2454969.5829, rel=0, abs=1e-8)
+    assert loaders._coerce("bkjd", "") is None
+    assert loaders._coerce("bkjd", "n/a") is None
+    koi_epoch = [kind for typed, src, kind in loaders._KOI_COLS if typed == "epoch_bjd"]
+    assert koi_epoch == ["bkjd"]
