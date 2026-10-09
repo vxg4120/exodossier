@@ -52,9 +52,10 @@ def test_a_month_is_a_utc_month():
 
 
 def test_the_first_ok_run_ever_is_always_kept():
-    """pipeline/select_targets.py reads each TOI's OLDEST raw_exofop_toi row, which for the Wave 2
-    cohort is run 1 (2026-07-15). The monthly rule keeps a table's first OK run forever, so its
-    answer key survives; a failed run before it changes nothing."""
+    """The monthly rule keeps a table's first OK run forever, even behind an earlier failed run.
+    pipeline/select_targets.py reads each TOI's OLDEST raw_exofop_toi row, and for most TOIs that
+    is in run 1 (2026-07-15); the TOIs whose oldest row is in a dropped run are measured in
+    docs/specs/raw-retention.md."""
     runs = [_run(1, 7, 14, status="error"), _run(2, 7, 15)] + [
         _run(i, 7, i + 13) for i in range(3, 12)
     ]
