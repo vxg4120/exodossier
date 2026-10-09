@@ -1,6 +1,7 @@
 # Spec: snapshot retention for the exo raw_* tables
 
-**Status:** active (approved by Vib on 2026-10-09: "you can build and deploy")
+**Status:** shipped 2026-10-09 (approved by Vib: "you can build and deploy"); the
+nightly criterion is still open
 **Owner:** Vib
 **Repos touched:** exodossier (the script), space (the nightly step and runbook)
 **Last updated:** 2026-10-09
@@ -98,11 +99,19 @@ that no nightly reader reads. This applies the policy that has bounded the satel
   monthly keepers fails the suite.
 - [x] On the same scratch database, the full suite's failure set is identical to `main`'s
   (18 data-dependent tests on an empty graph), with 94 passed against 79.
-- [ ] Production: the backup is on the laptop and `pg_restore --list` shows all six tables. The
+- [x] Production: the backup is on the laptop and `pg_restore --list` shows all six tables. The
   dry run's plan keeps each table's newest 3 OK runs and its July, August, September and October
   firsts. After `--compact`, a dry run reports "would drop 0 runs", the `exo` database is under
   1.5 GB, each table's newest OK run id and row count are unchanged, `raw_exofop_toi` still holds
   run 1, and the landing page, `exo.vibcreates.com` and `exo.vibcreates.com/api/stats` return 200.
+  Done on 2026-10-09 (21:17 to 21:18 UTC). The backup is
+  `~/Backups/vibcreates/exo-raw-snapshots-20261009.dump` (759 MB, with a matching sha256 on
+  both ends; it restores 583,404 `raw_koi_cumulative` rows, the live count). `--compact`
+  dropped 54 of 61 runs per table, 324 runs and 4,151,312 rows in all, in about 40 s, and
+  `raw_ps` went from 3,817 MB to 443 MB. `exo` went from 6,403 MB to 949 MB, and the box
+  from 7.1 GB free (81%) to 12 GB free (67%). Each table's newest OK run (1934 to 1939) kept
+  its row count, run 1 kept its 8,064 TOIs, and a dry run and the nightly's own `--apply`
+  command both drop 0 runs.
 - [ ] After the next two nightlies, `grep -c "step exo_prune_snapshots: .*exit 0" refresh.log`
   is 2, `grep -c "!! exo prune_snapshots failed" refresh.log` is 0, and `exo_build_graph`
   exits 0.
