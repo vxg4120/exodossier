@@ -1,7 +1,7 @@
 # Spec: snapshot retention for the exo raw_* tables
 
-**Status:** shipped 2026-10-09 (approved by Vib: "you can build and deploy"); the
-nightly criterion is still open
+**Status:** shipped 2026-10-09 (approved by Vib: "you can build and deploy"); every
+acceptance criterion met as of 2026-10-12
 **Owner:** Vib
 **Repos touched:** exodossier (the script), space (the nightly step and runbook)
 **Last updated:** 2026-10-09
@@ -112,9 +112,14 @@ that no nightly reader reads. This applies the policy that has bounded the satel
   from 7.1 GB free (81%) to 12 GB free (67%). Each table's newest OK run (1934 to 1939) kept
   its row count, run 1 kept its 8,064 TOIs, and a dry run and the nightly's own `--apply`
   command both drop 0 runs.
-- [ ] After the next two nightlies, `grep -c "step exo_prune_snapshots: .*exit 0" refresh.log`
+- [x] After the next two nightlies, `grep -c "step exo_prune_snapshots: .*exit 0" refresh.log`
   is 2, `grep -c "!! exo prune_snapshots failed" refresh.log` is 0, and `exo_build_graph`
-  exits 0.
+  exits 0. Checked on 2026-10-12 after four nightlies (Oct 10 and 11, 07:10 and 19:10 UTC):
+  the step logged exit 0 in all four, there were no failure lines, and `exo_build_graph` exited
+  0 each time. On the nights exo pulled new data, the step deleted 6 runs, one per table, and
+  on the other nights it deleted none. Every table holds 7 runs, and `exo` sits at 1,055 MB,
+  up from 949 MB just after compaction, because the newest run lands before the night's
+  DELETE frees its oldest.
 
 ## Open questions
 - (Vib) Is a monthly sample of raw history worth about 1.2 GB a year across both apps, or
