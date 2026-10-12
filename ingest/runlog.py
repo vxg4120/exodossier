@@ -18,6 +18,14 @@ import requests
 USER_AGENT = "ExoDossier/0.1 (exoplanet identity-graph research project; polite; contact in repo)"
 TIMEOUT_S = 180
 
+# The interval for a feed that refreshes once a day. The nightly runs at 07:10 and 19:10 UTC and
+# fresh_within counts from the last pull's finished_at, so with a 24-hour interval a pull was
+# skipped or taken depending on whether that night's oei steps ran a few minutes longer or
+# shorter: the exo feeds refreshed every 24 or 36 hours until 2026-10-12. Anything between one
+# slot (12 hours) and a day works; 20 hours leaves room for a late or slow run on either side.
+# Ported from the satellite platform's runlog.DAILY (2026-10-11).
+DAILY = dt.timedelta(hours=20)
+
 
 def start_run(conn, source: str, endpoint: str) -> int:
     """Open a new ingest_run row and return its id. Caller must eventually finish_run() it."""

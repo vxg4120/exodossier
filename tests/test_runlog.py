@@ -63,3 +63,33 @@ def test_polite_get_ledgers_http_error(db_conn, _cleanup):
             (_SRC,),
         )
         assert cur.fetchone()[0] == "error"
+
+
+@pytest.mark.db
+def test_a_daily_feed_pulled_at_yesterdays_slot_is_due_again_today(db_conn, _cleanup):
+    # The nightly's two slots are 12 hours apart and fresh_within counts from finished_at, so a
+    # full day's interval left yesterday's slot "fresh" whenever tonight's exo ingest started a
+    # few minutes earlier than yesterday's finished. The daily interval has to call that pull
+    # stale, and a pull from the other slot today fresh.
+    run_id = runlog.start_run(db_conn, _SRC, "daily")
+    runlog.finish_run(db_conn, run_id, rows=1, bytes_dl=1, status="ok")
+    with db_conn.cursor() as cur:
+        cur.execute(
+            "UPDATE ingest_run SET started_at = now() - interval '24 hours', "
+            "finished_at = now() - interval '23 hours 55 minutes' WHERE ingest_run_id = %s",
+            (run_id,),
+        )
+    assert runlog.fresh_within(db_conn, _SRC, "daily", runlog.DAILY) is False
+    with db_conn.cursor() as cur:
+        cur.execute(
+            "UPDATE ingest_run SET started_at = now() - interval '12 hours', "
+            "finished_at = now() - interval '11 hours 55 minutes' WHERE ingest_run_id = %s",
+            (run_id,),
+        )
+    assert runlog.fresh_within(db_conn, _SRC, "daily", runlog.DAILY) is True
+
+
+def test_every_daily_feed_fits_between_one_nightly_slot_and_a_day():
+    from ingest import loaders
+
+    assert dt.timedelta(hours=12) < loaders.MIN_INTERVAL < dt.timedelta(hours=24)

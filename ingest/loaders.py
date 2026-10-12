@@ -14,7 +14,6 @@ malformed numeric/date cell degrades to NULL (logged) rather than aborting a ~7k
 from __future__ import annotations
 
 import csv
-import datetime as dt
 import io
 import logging
 import urllib.parse
@@ -25,7 +24,7 @@ from ingest import runlog
 
 logger = logging.getLogger(__name__)
 
-MIN_INTERVAL = dt.timedelta(hours=24)
+MIN_INTERVAL = runlog.DAILY
 
 EXOFOP_TOI_URL = "https://exofop.ipac.caltech.edu/tess/download_toi.php?sort=toi&output=csv"
 EXOFOP_CTOI_URL = "https://exofop.ipac.caltech.edu/tess/download_ctoi.php?sort=ctoi&output=csv"
