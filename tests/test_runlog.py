@@ -89,7 +89,23 @@ def test_a_daily_feed_pulled_at_yesterdays_slot_is_due_again_today(db_conn, _cle
     assert runlog.fresh_within(db_conn, _SRC, "daily", runlog.DAILY) is True
 
 
+@pytest.mark.db
+def test_a_failed_morning_pull_is_retried_in_the_evening(db_conn, _cleanup):
+    # Only an 'ok' run makes a feed fresh, so a pull that failed at this morning's slot leaves
+    # the feed due at the evening slot, 12 hours later.
+    run_id = runlog.start_run(db_conn, _SRC, "daily_retry")
+    runlog.finish_run(db_conn, run_id, rows=0, bytes_dl=0, status="error")
+    with db_conn.cursor() as cur:
+        cur.execute(
+            "UPDATE ingest_run SET started_at = now() - interval '12 hours', "
+            "finished_at = now() - interval '11 hours 55 minutes' WHERE ingest_run_id = %s",
+            (run_id,),
+        )
+    assert runlog.fresh_within(db_conn, _SRC, "daily_retry", runlog.DAILY) is False
+
+
 def test_every_daily_feed_fits_between_one_nightly_slot_and_a_day():
     from ingest import loaders
 
-    assert dt.timedelta(hours=12) < loaders.MIN_INTERVAL < dt.timedelta(hours=24)
+    assert loaders.MIN_INTERVAL is runlog.DAILY
+    assert dt.timedelta(hours=12) < runlog.DAILY < dt.timedelta(hours=24)

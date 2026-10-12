@@ -5,7 +5,7 @@ Six one-time bulk pulls feed Wave 1:
   - ExoFOP TESS CTOI list (download_ctoi.php CSV)
   - NASA Exoplanet Archive TAP `toi`, `cumulative` (KOI), `ps`, `pscomppars` (ADQL, format=csv)
 
-Every pull goes through ingest.runlog.polite_get (24h freshness gate, User-Agent, ledger row).
+Every pull goes through ingest.runlog.polite_get (runlog.DAILY 20h gate, User-Agent, ledger row).
 Each source's typed identity/attribute columns are projected out of the CSV by header name; the
 ENTIRE raw row is also kept verbatim in the `extra` JSONB column (provenance discipline). A single
 malformed numeric/date cell degrades to NULL (logged) rather than aborting a ~7k/40k-row load.

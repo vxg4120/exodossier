@@ -1,4 +1,4 @@
-"""Run all six Wave 1 catalog pulls once, politely (24h freshness gate per endpoint).
+"""Run all six Wave 1 catalog pulls once, politely (20h runlog.DAILY freshness gate per endpoint).
 
 Each loader owns its own ledger row; a failure in one source is logged (ingest_run.status =
 'error') and does not abort the others (honest failures: ledger the error, keep going).
