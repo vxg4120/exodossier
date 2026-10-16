@@ -2322,3 +2322,13 @@ button {
     grid-row: auto;
   }
 }
+
+@media (pointer: coarse) {
+  /* the 44px touch floor for the story links: the link box itself grows, as in orbital */
+  .story-demoted__list a,
+  .story-record__line a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+}

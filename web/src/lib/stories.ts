@@ -147,16 +147,37 @@ export function dispatch(s: Stories): string[] {
     const conf = confirmedFromCandidates(v.transitions);
     const out_ = ruledOutFromCandidates(v.transitions);
     const demoted = v.demoted.length;
-    const allFp = v.demoted.every((d) => d.to === "FP");
-    let line =
-      `In the same span, TESS follow-up confirmed ${plural(conf, "candidate", "candidates")} ` +
-      `and ruled out ${fmtInt(out_)}`;
-    if (demoted > 0) {
-      line += `, and ${plural(demoted, "planet", "planets")} that had been marked confirmed turned out to be ${allFp ? (demoted === 1 ? "a false positive" : "false positives") : "false positives or false alarms"}`;
+    // "In the same span" only when the TOI window starts where the confirmed series does
+    const sameSpan = c.series.length >= 2 && c.series[0].date === v.from_date;
+    const since = sameSpan ? "In the same span" : `Since ${fmtDay(v.from_date)}`;
+    const clauses: string[] = [];
+    if (conf > 0 || out_ > 0) {
+      clauses.push(
+        `TESS follow-up confirmed ${plural(conf, "candidate", "candidates")} and ruled out ${fmtInt(out_)}`,
+      );
     }
-    out.push(line + ".");
+    if (demoted > 0) {
+      clauses.push(
+        `${plural(demoted, "planet", "planets")} that had been marked ${demotedFrom(v.demoted)} turned out to be ${demotedTo(v.demoted)}`,
+      );
+    }
+    if (clauses.length > 0) out.push(`${since}, ${clauses.join(", and ")}.`);
   }
   return out;
+}
+
+/** What the demoted TOIs had been: "confirmed" when every one was CP, "confirmed or known" when
+    any was KP (a known planet from before TESS). */
+export function demotedFrom(demoted: { from: string }[]): string {
+  return demoted.some((d) => d.from === "KP") ? "confirmed or known" : "confirmed";
+}
+
+/** What they became: false positives, false alarms, or both. */
+export function demotedTo(demoted: { to: string }[]): string {
+  const one = demoted.length === 1;
+  if (demoted.every((d) => d.to === "FP")) return one ? "a false positive" : "false positives";
+  if (demoted.every((d) => d.to === "FA")) return one ? "a false alarm" : "false alarms";
+  return "false positives or false alarms";
 }
 
 /* ---- planet comparisons ------------------------------------------------------------------ */

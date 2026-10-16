@@ -9,6 +9,7 @@ import { runStatusMeta } from "../lib/dispositions";
 import {
   awaitingVerdict,
   confirmedFromCandidates,
+  demotedFrom,
   dispatch,
   fmtDay,
   fmtDayShort,
@@ -192,24 +193,21 @@ function StoryPanels({ s }: { s: Stories }) {
           value={awaitingVerdict(s)}
           sub="TESS candidates (PC or APC) on ExoFOP's list"
         />
-        <StatTile
-          label="Confirmed by follow-up"
-          value={confirmedFromCandidates(v.transitions)}
-          sub={
-            hasVerdicts && v.from_date
-              ? `TESS candidates moved to CP since ${fmtDayShort(v.from_date)}`
-              : "no earlier snapshot to compare yet"
-          }
-        />
-        <StatTile
-          label="Ruled out"
-          value={ruledOutFromCandidates(v.transitions)}
-          sub={
-            hasVerdicts && v.from_date
-              ? `TESS candidates moved to FP or FA since ${fmtDayShort(v.from_date)}`
-              : "no earlier snapshot to compare yet"
-          }
-        />
+        {/* the change tiles need an earlier snapshot; without one they are hidden, not zero */}
+        {hasVerdicts && v.from_date ? (
+          <>
+            <StatTile
+              label="Confirmed by follow-up"
+              value={confirmedFromCandidates(v.transitions)}
+              sub={`TESS candidates moved to CP since ${fmtDayShort(v.from_date)}`}
+            />
+            <StatTile
+              label="Ruled out"
+              value={ruledOutFromCandidates(v.transitions)}
+              sub={`TESS candidates moved to FP or FA since ${fmtDayShort(v.from_date)}`}
+            />
+          </>
+        ) : null}
       </div>
 
       {hasConfirmedChange ? <ConfirmedPanel s={s} /> : null}
@@ -253,7 +251,7 @@ function Story({
 
 const targetHref = (ident: string) => `/target/${encodeURIComponent(ident)}`;
 
-/* ---- a. the confirmed list grew ---------------------------------------------------------- */
+/* ---- a. how the confirmed list moved ----------------------------------------------------- */
 function ConfirmedPanel({ s }: { s: Stories }) {
   const c = s.confirmed;
   const first = c.series[0];
@@ -287,15 +285,23 @@ function ConfirmedPanel({ s }: { s: Stories }) {
 
   return (
     <Story
-      title="The confirmed list grew"
+      title={
+        net > 0
+          ? "The confirmed list grew"
+          : net < 0
+            ? "The confirmed list shrank"
+            : "The confirmed list held steady"
+      }
       meta={`${fmtDayShort(first.date)} to ${fmtDayShort(last.date)}`}
       headline={headline}
       how={
         <>
           Each point counts the planets in one retained snapshot of the archive&rsquo;s confirmed
-          table: the first of each month, then the newest three days. Nothing is known between
-          points, so the line steps. &ldquo;First seen&rdquo; is the first snapshot that lists a
-          planet; arrivals inside one snapshot are in name order.
+          table. The oldest kept snapshot is the {fmtDay(first.date)} baseline; after it come the
+          first pull of each month and the newest three pulls. Nothing is known between points,
+          so the line steps. &ldquo;First seen&rdquo; is the first snapshot that lists a planet;
+          arrivals inside one snapshot are in name order. A renamed planet shows up as one
+          arrival and one departure.
         </>
       }
     >
@@ -366,11 +372,7 @@ function SizesPanel({ s }: { s: Stories }) {
       <div className="story-records">
         {r.smallest ? (
           <RecordTile label="Smallest" value={fmtNum(r.smallest.value)} unit="Earth radii" rec={r.smallest}>
-            {r.smallest.value < 1
-              ? "slightly smaller than Earth"
-              : r.smallest.value === 1
-                ? "the same size as Earth"
-                : `${fmtNum(r.smallest.value)} times as wide as Earth`}
+            {earthCompare(r.smallest.value)}
           </RecordTile>
         ) : null}
         {r.shortest_period ? <YearRecord label="Shortest year" rec={r.shortest_period} /> : null}
@@ -378,6 +380,14 @@ function SizesPanel({ s }: { s: Stories }) {
       </div>
     </Story>
   );
+}
+
+/** A radius against Earth's, computed: within 10% is "about Earth's size", smaller is a
+    percentage of Earth's radius, larger is a multiple of it. */
+function earthCompare(re: number): string {
+  if (Math.abs(re - 1) <= 0.1 + 1e-9) return "about Earth's size"; // 0.9 and 1.1 included
+  if (re < 1) return `${Math.round(re * 100)}% of Earth's radius`;
+  return `${fmtNum(re)} times Earth's radius`;
 }
 
 function YearRecord({ label, rec }: { label: string; rec: PlanetRecord }) {
@@ -549,7 +559,8 @@ function VerdictsPanel({ s }: { s: Stories }) {
       {demoted.length > 0 ? (
         <div className="story-demoted">
           <h3 className="story__subhead">
-            Confirmed, then ruled out, since {fmtDay(s.toi_verdicts.from_date)}
+            {demotedFrom(demoted) === "confirmed" ? "Confirmed" : "Confirmed or known"}, then ruled
+            out, since {fmtDay(s.toi_verdicts.from_date)}
           </h3>
           <ul className="story-demoted__list">
             {demoted.map((d) => (
