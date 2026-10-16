@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { getConflicts, getStats } from "../api/client";
 import type { ConflictRow, IngestRun } from "../api/types";
 import { useApi } from "../hooks/useApi";
-import { compact, fmtDate, fmtInt } from "../lib/format";
+import { fmtDate, fmtInt } from "../lib/format";
 import { CONFLICT_TABS } from "../lib/conflicts";
 import { runStatusMeta } from "../lib/dispositions";
 import { Panel } from "../components/Panel";
@@ -38,7 +38,7 @@ export function Overview() {
                 lead
                 hero
                 label="Candidates"
-                value={compact(s.candidates)}
+                value={s.candidates}
                 sub={
                   <>
                     host stars <span className="num">{fmtInt(s.stars)}</span>
@@ -47,18 +47,18 @@ export function Overview() {
               />
               <StatTile
                 label="Crosswalk identifiers"
-                value={compact(s.identifiers)}
+                value={s.identifiers}
                 sub="TIC · TOI · CTOI · KOI · Gaia · HD · HIP"
               />
               <StatTile
                 label="Source assertions"
-                value={compact(s.source_assertions)}
+                value={s.source_assertions}
                 sub="per-publication provenance"
               />
               <StatTile
                 conflict
                 label="Disposition conflicts"
-                value={compact(s.conflicts.disposition)}
+                value={s.conflicts.disposition}
                 sub={
                   <>
                     incl. <span className="num">{s.conflicts.disposition_dramatic}</span> FALSE

@@ -154,7 +154,7 @@ export function FollowUp() {
                     lead
                     hero
                     label="LEO tracked objects"
-                    value={compact(c.leo_objects)}
+                    value={c.leo_objects}
                     sub={
                       <>
                         peak shell{" "}
@@ -165,7 +165,7 @@ export function FollowUp() {
                   />
                   <StatTile
                     label="Payloads launched"
-                    value={compact(c.payloads_launched_1y)}
+                    value={c.payloads_launched_1y}
                     sub={
                       <>
                         last year · <span className="num">{fmtInt(c.payloads_launched_30d)}</span> in 30
@@ -175,7 +175,7 @@ export function FollowUp() {
                   />
                   <StatTile
                     label="Largest operator"
-                    value={spacex ? compact(spacex.payloads) : "—"}
+                    value={spacex ? spacex.payloads : "—"}
                     sub={
                       spacexPct !== null ? (
                         <>
@@ -188,10 +188,12 @@ export function FollowUp() {
                   />
                   <StatTile
                     label="Catalog objects"
-                    value={compact(c.catalog_objects)}
+                    value={c.catalog_objects}
                     sub={
                       <>
-                        <span className="num">{compact(c.tracked_with_elements)}</span> with live
+                        <span className="num" title={fmtInt(c.tracked_with_elements)}>
+                          {compact(c.tracked_with_elements)}
+                        </span> with live
                         elements
                       </>
                     }

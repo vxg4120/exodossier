@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useState } from "react";
 import { NavLink, Route, Routes } from "react-router-dom";
 import { getStats, MOCK } from "./api/client";
 import { useApi } from "./hooks/useApi";
-import { compact } from "./lib/format";
+import { compact, fmtInt } from "./lib/format";
 import { SourceBadge } from "./components/SourceBadge";
 import { Loading } from "./components/States";
 import { maybeAutoStartTour, startTour } from "./lib/tour";
@@ -44,18 +44,21 @@ function Clock() {
 function Telemetry() {
   const stats = useApi(() => getStats(), []);
   const s = stats.data;
-  const chip = (k: string, v: string, cls = "") => (
+  // Takes the raw count: the chip shows it compacted, the title carries the exact figure.
+  const chip = (k: string, n: number | undefined, cls = "") => (
     <div className="tele">
       <span className="tele__k">{k}</span>
-      <span className={`tele__v ${cls}`}>{v}</span>
+      <span className={`tele__v ${cls}`} title={n === undefined ? undefined : fmtInt(n)}>
+        {n === undefined ? "····" : compact(n)}
+      </span>
     </div>
   );
   return (
     <div className="topbar__tele">
-      {chip("candidates", s ? compact(s.candidates) : "····")}
-      {chip("host stars", s ? compact(s.stars) : "····")}
-      {chip("assertions", s ? compact(s.source_assertions) : "····", "is-signal")}
-      {chip("disposition conflicts", s ? compact(s.conflicts.disposition) : "····", "is-conflict")}
+      {chip("candidates", s?.candidates)}
+      {chip("host stars", s?.stars)}
+      {chip("assertions", s?.source_assertions, "is-signal")}
+      {chip("disposition conflicts", s?.conflicts.disposition, "is-conflict")}
     </div>
   );
 }
