@@ -44,7 +44,7 @@ export function ErrorState({ message, onRetry }: { message: string; onRetry?: ()
   const shown = visitorMessage(message);
   return (
     <div className="state state--error" role="alert">
-      <span className="state__title">Signal lost</span>
+      <h2 className="state__title">Signal lost</h2>
       <span className="state__msg" title={shown === message ? undefined : message}>
         {shown}
       </span>
@@ -60,7 +60,7 @@ export function ErrorState({ message, onRetry }: { message: string; onRetry?: ()
 export function EmptyState({ title, message }: { title: ReactNode; message?: ReactNode }) {
   return (
     <div className="state">
-      <span className="state__title">{title}</span>
+      <h2 className="state__title">{title}</h2>
       {message ? <span className="state__msg">{message}</span> : null}
     </div>
   );

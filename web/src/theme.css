@@ -368,6 +368,9 @@ button {
   border-bottom: 1px solid var(--rule);
 }
 .panel__title {
+  /* an h2 (one per plate, for the heading outline); the look stays the label */
+  margin: 0;
+  font-weight: 400;
   font-size: var(--fs-micro);
   letter-spacing: 0.13em;
   text-transform: uppercase;
@@ -1178,6 +1181,9 @@ button {
   color: var(--ink-dim);
 }
 .state__title {
+  /* an h2 in the error and empty states; a plain label while loading */
+  margin: 0;
+  font-weight: 400;
   font-size: var(--fs-sm);
   letter-spacing: 0.08em;
   text-transform: uppercase;
