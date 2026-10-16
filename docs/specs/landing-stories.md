@@ -141,3 +141,22 @@ giant >= 6, unknown radius.
   July to 10,656 in October in a naive count).
 - 2026-10-16 (Claude) Exo has no disposition history table; the retained raw snapshots are the only
   history (2026-07-15 baseline, the first of each month, and the newest three daily pulls).
+- 2026-10-16 (Claude, exo) The exo payload carries a few keys beyond the spec, all additive:
+  `confirmed.series[]` points also have `added`/`removed` versus the snapshot before (null on the
+  first); `confirmed.removed` names the departures with `last_seen`; `confirmed.month_baseline_date`
+  and `added_since_month` back the dispatch's "N of them since October 1"; `toi_alerts_monthly[]`
+  rows have `partial`. Transition codes are the TFOPWG codes, `null` for a TOI with no disposition,
+  and the sentinels `NEW` / `DROPPED` for a TOI missing at one end. "This month" is measured from the
+  first retained snapshot of the newest snapshot's month, or from the snapshot before when the
+  newest is that first one (the morning of the 1st), so the window is never empty by construction.
+- 2026-10-16 (Claude, exo) Departures from pscomppars are not always retractions: on Oct 1
+  "CD-35 2722 b" left as "CD-35 2722 B b" arrived (a rename), and WASP-126 c left the list. The
+  page names them and says so. Blank TFOPWG dispositions are NULL in raw_exofop_toi; compare with
+  IS DISTINCT FROM. TOIs 7711.01 and 7713.01 have been blank since July 15, so they are not new.
+- 2026-10-16 (Claude, exo) The existing disposition hues fail colour-blind separation (validator:
+  deutan dE 5.2 confirmed vs ambiguous, normal-vision dE 14.9 known vs confirmed). Token changes are
+  out of scope, so every disposition mark is keyed by a glyph badge and false alarms are striped.
+- 2026-10-16 (Claude, exo) /api/stories costs about 150 ms of server execution with warm buffers
+  (nine queries); through the SSH tunnel the wall time is 4 to 6 s and spikes past 15 s when the
+  tunnel itself is slow (6.9 s to connect, 3.1 s for `select 1` in one run). The first run after a
+  cold buffer cache took 9 s. Warmed in the lifespan, so visitors never pay it.
