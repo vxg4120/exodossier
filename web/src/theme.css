@@ -1367,6 +1367,11 @@ button {
 @media (max-width: 560px) {
   :root {
     --pad: 14px;
+    /* phones read the bottom type tiers one step up; desktop density stays */
+    --fs-micro: 11px;
+    --fs-xs: 12px;
+    --fs-sm: 13px;
+    --fs-base: 14px;
   }
   .grid--stats {
     grid-template-columns: 1fr;
@@ -1479,13 +1484,13 @@ button {
 }
 .hm-axis-label {
   fill: var(--ink-faint);
-  font-size: 9px;
+  font-size: var(--fs-micro);
   font-family: var(--font-mono);
   letter-spacing: 0.06em;
 }
 .hm-axis-title {
   fill: var(--ink-dim);
-  font-size: 10px;
+  font-size: var(--fs-micro);
   font-family: var(--font-mono);
   letter-spacing: 0.1em;
   text-transform: uppercase;
