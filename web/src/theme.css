@@ -1437,7 +1437,24 @@ button {
 /* comfortable touch targets on touch-first devices */
 @media (pointer: coarse) {
   .btn {
-    padding: 8px 12px;
+    padding: 11px 14px;
+  }
+  .dtable tbody td {
+    padding: 12px;
+  }
+  .assert-line,
+  .result-row {
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+  .example-list {
+    gap: 0;
+  }
+  .example-list li a,
+  .back-link {
+    display: block;
+    padding-top: 12px;
+    padding-bottom: 12px;
   }
   .tab {
     padding: 11px 16px;
@@ -1823,4 +1840,15 @@ button {
 }
 .driver-popover.exo-tour .driver-popover-arrow-side-bottom {
   border-bottom-color: var(--surface-2);
+}
+/* touch: these two rules are defined above in this section, so their coarse
+   overrides must come after them */
+@media (pointer: coarse) {
+  .topbar__help {
+    width: 36px;
+    height: 36px;
+  }
+  .driver-popover.exo-tour .driver-popover-footer-btn {
+    padding: 10px 14px;
+  }
 }
