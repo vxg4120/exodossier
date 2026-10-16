@@ -133,7 +133,8 @@ button {
   font-variant-numeric: tabular-nums;
 }
 .dash {
-  color: var(--ink-ghost);
+  /* --ink-ghost (3.18:1) is for rules and marks; a null placeholder is text */
+  color: var(--ink-faint);
 }
 .mono-hi {
   color: var(--ink);
@@ -283,7 +284,7 @@ button {
 }
 .navlink__idx {
   font-size: var(--fs-micro);
-  color: var(--ink-ghost);
+  color: var(--ink-faint);
   font-variant-numeric: tabular-nums;
 }
 .navlink__name {
