@@ -93,10 +93,8 @@ export function Lightcurves() {
     () => getLightcurveResults(LIMIT, offset, cohort),
     [cohort, offset],
   );
-  // A TOI the current graph no longer resolves has no target page to open.
-  const open = (r: LightcurveRow) => {
-    if (r.candidate_id !== null) navigate(`/target/${r.candidate_id}`);
-  };
+  // A TOI the current graph no longer resolves has no target page to open (see isLinkable below).
+  const open = (r: LightcurveRow) => navigate(`/target/${r.candidate_id}`);
 
   return (
     <div className="view fadein">
@@ -165,6 +163,7 @@ export function Lightcurves() {
                   rows={data.rows}
                   rowKey={(r) => r.target_id}
                   onRowClick={open}
+                  isLinkable={(r) => r.candidate_id !== null}
                 />
                 <Pager offset={offset} limit={LIMIT} total={data.total} onOffset={setOffset} />
               </>
