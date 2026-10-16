@@ -15,14 +15,24 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routers import attribution, conflicts, lightcurves, search, stats, target, twoskies
+from api.routers import (
+    attribution,
+    conflicts,
+    lightcurves,
+    search,
+    stats,
+    stories,
+    target,
+    twoskies,
+)
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    # The landing page's two expensive responses are computed once, now, on daemon threads, so
-    # the first visitor after a restart (or a deploy) is served from memory like everyone else.
+    # The landing page's expensive responses are computed once, now, on daemon threads, so the
+    # first visitor after a restart (or a deploy) is served from memory like everyone else.
     stats.stats_cache.warm(keep_warm=True)
+    stories.stories_cache.warm(keep_warm=True)
     conflicts.first_disposition_page.warm(keep_warm=True)
     yield
 
@@ -46,6 +56,7 @@ app.add_middleware(
 )
 
 app.include_router(stats.router, prefix="/api")
+app.include_router(stories.router, prefix="/api")
 app.include_router(search.router, prefix="/api")
 app.include_router(target.router, prefix="/api")
 app.include_router(conflicts.router, prefix="/api")
