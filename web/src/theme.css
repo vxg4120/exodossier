@@ -1800,13 +1800,16 @@ button {
   align-self: center;
   flex: none;
   margin: 0 14px;
-  width: 24px;
-  height: 24px;
+  /* a 36px target; a circle on phones, a "? Tour" pill from 768px up */
+  min-width: 36px;
+  height: 36px;
+  padding: 0;
+  gap: 7px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border: 1px solid var(--rule-2);
-  border-radius: 50%;
+  border-radius: 18px;
   background: var(--surface-2);
   color: var(--ink-dim);
   font-size: var(--fs-sm);
@@ -1817,6 +1820,20 @@ button {
 .topbar__help:hover {
   color: var(--signal);
   border-color: var(--signal-dim);
+}
+.topbar__help-word {
+  display: none;
+}
+@media (min-width: 768px) {
+  .topbar__help {
+    padding: 0 14px 0 12px;
+  }
+  .topbar__help-word {
+    display: inline;
+  }
+  .topbar__help:hover .topbar__help-word {
+    color: var(--signal);
+  }
 }
 
 .driver-popover.exo-tour {
@@ -1887,13 +1904,9 @@ button {
 .driver-popover.exo-tour .driver-popover-arrow-side-bottom {
   border-bottom-color: var(--surface-2);
 }
-/* touch: these two rules are defined above in this section, so their coarse
-   overrides must come after them */
+/* touch: the tour button rule is defined above in this section, so its
+   coarse override must come after it */
 @media (pointer: coarse) {
-  .topbar__help {
-    width: 36px;
-    height: 36px;
-  }
   .driver-popover.exo-tour .driver-popover-footer-btn {
     padding: 10px 14px;
   }

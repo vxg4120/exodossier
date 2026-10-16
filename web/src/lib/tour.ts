@@ -66,6 +66,24 @@ const STEPS: DriveStep[] = [
   },
 ];
 
+/** Under 900px the rail is a horizontal strip under the top bar that scrolls sideways, so the
+    nav and Follow-up anchors may sit off-screen in it: scroll the anchor into the strip before
+    driver measures it, and point the popover down instead of right. */
+function stepsForViewport(): DriveStep[] {
+  if (!window.matchMedia("(max-width: 900px)").matches) return STEPS;
+  return STEPS.map((step) => {
+    if (step.element !== '[data-tour="nav"]' && step.element !== '[data-tour="followup"]') {
+      return step;
+    }
+    const inline: ScrollLogicalPosition = step.element === '[data-tour="nav"]' ? "start" : "center";
+    return {
+      ...step,
+      popover: { ...step.popover, side: "bottom", align: "start" },
+      onHighlightStarted: (el) => el?.scrollIntoView({ block: "nearest", inline }),
+    };
+  });
+}
+
 /** Build and run the tour. Safe to call repeatedly (each call is a fresh instance). */
 export function startTour(): void {
   const d = driver({
@@ -81,7 +99,7 @@ export function startTour(): void {
     prevBtnText: "← Back",
     doneBtnText: "Done",
   });
-  d.setSteps(STEPS);
+  d.setSteps(stepsForViewport());
   d.drive();
 }
 

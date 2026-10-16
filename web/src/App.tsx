@@ -87,7 +87,10 @@ export default function App() {
           title="Replay the intro tour"
           aria-label="Replay the intro tour"
         >
-          ?
+          <span aria-hidden="true">?</span>
+          <span className="topbar__help-word tele__k" aria-hidden="true">
+            Tour
+          </span>
         </button>
       </header>
 
