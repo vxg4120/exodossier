@@ -32,6 +32,10 @@ def _cold_caches():
     yield
     _wait_for_refresh(stats.stats_cache)
     _wait_for_refresh(conflicts.first_disposition_page)
+    # Reset on teardown too, so a fake value planted here never leaks into a later test file
+    # whatever the run order (the old twoskies fixture got this from monkeypatch for free).
+    stats.stats_cache.reset()
+    conflicts.first_disposition_page.reset()
 
 
 class _Counter:
@@ -207,3 +211,23 @@ def test_a_failed_warm_up_leaves_the_first_request_to_compute_cold():
     cache.warm().join()
     assert cache.value is None
     assert cache.get(lambda: "cold") == "cold"
+
+
+def test_keep_warm_recomputes_on_the_ttl_without_any_request():
+    """A quiet site must not serve last night's counts to the first visitor of the day: with
+    keep_warm the warm-up thread recomputes every TTL on its own, no request needed."""
+    refreshes = []
+
+    def refresh():
+        refreshes.append(time.monotonic())
+        return len(refreshes)
+
+    cache = RefreshingCache("t", 0.05, refresh)
+    cache.warm(keep_warm=True)
+    deadline = time.monotonic() + 2.0
+    while len(refreshes) < 3 and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert len(refreshes) >= 3, "the keep-warm loop did not recompute on the TTL"
+    # The served value is the latest completed refresh, or the one before it if a refresh is
+    # mid-flight at the moment of reading.
+    assert cache.value in (len(refreshes), len(refreshes) - 1)

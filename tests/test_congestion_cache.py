@@ -79,6 +79,7 @@ def _cold_cache():
     twoskies._heavy.reset()
     yield
     _wait_for_refresh()
+    twoskies._heavy.reset()
 
 
 def test_a_warm_hit_skips_the_scan_but_reads_the_launch_windows_fresh():

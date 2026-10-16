@@ -60,16 +60,28 @@ class RefreshingCache[T]:
                 return entry[1]
         return self._compute_cold(compute)
 
-    def warm(self) -> threading.Thread:
+    def warm(self, keep_warm: bool = False) -> threading.Thread:
         """Start the first computation on a daemon thread (process start-up). A request that
         arrives meanwhile waits on the same single-flight lock rather than computing again; a
-        failure is logged and the next request computes cold as before."""
+        failure is logged and the next request computes cold as before.
+
+        With ``keep_warm`` the thread then recomputes every ``ttl_s`` regardless of traffic.
+        Without it, staleness has no upper bound on a quiet site: the first visitor after an
+        idle stretch is served whatever was last computed, however long ago, and only that
+        visit triggers the refresh. The timer bounds it to one TTL past the nightly rebuild."""
 
         def run() -> None:
             try:
                 self._compute_cold(self._refresh)
             except Exception:
                 log.exception("%s: warm-up failed; the first request computes it", self.name)
+            while keep_warm:
+                time.sleep(self.ttl_s)
+                with self._state:
+                    if self.refreshing:
+                        continue
+                    self.refreshing = True
+                self._refresh_in_background()
 
         thread = threading.Thread(target=run, daemon=True)
         thread.start()
