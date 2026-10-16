@@ -87,10 +87,11 @@ tables hold nothing.
       prints `400`; `/api/lightcurves/target/-1` prints `404`.
 - [x] `/lightcurves` is in the nav between Conflicts and Follow-up and renders at 1280x800 and
       390x844 without horizontal page scroll.
-- [ ] Against a database with a full 58-target run, the summary reproduces the report's headline
+- [x] Against a database with a full 58-target run, the summary reproduces the report's headline
       counts for the same run: gold planets recovered 16/20, gold false positives with a signal
       20/20, discovery signals 16/18 (`curl ... | jq '.gold_planets.recovered,
-      .gold_false_positives.with_signal, .discovery.with_signal'`).
+      .gold_false_positives.with_signal, .discovery.with_signal'`). Verified 2026-10-16 on a
+      local rerun over the restored seed dump: 16 (15 exact), 20, 16.
 - [ ] Production shows real rows: `curl -s https://exo.vibcreates.com/api/lightcurves/summary |
       jq .processed` prints a number above 0 the morning after a nightly rebuild (blocked on the
       open questions below).
@@ -115,3 +116,6 @@ tables hold nothing.
   failed run.
 - 2026-10-16 (Claude) — Re-running `select_targets.py` against the restored dump selects the same
   58 targets (20 / 20 / 18), and 56 of their stars have light curves on disk.
+- 2026-10-16 (Claude) — A local rerun of `process.py` over the same Parquet files (three cohorts
+  in parallel, about 35 minutes) reproduces the July report's headline counts through the new
+  endpoints: 16/20 (15 at the catalog period, TOI-2134.02 at x0.5), 20/20, 16/18.

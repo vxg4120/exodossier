@@ -238,7 +238,7 @@ const COLUMNS: Column<LightcurveRow>[] = [
     render: (r) => (
       <span>
         <span className="mono-hi">{r.name}</span>
-        {r.toi ? <span className="hint"> TOI-{r.toi}</span> : null}
+        {r.toi && !r.name.includes(r.toi) ? <span className="hint"> TOI-{r.toi}</span> : null}
       </span>
     ),
   },
