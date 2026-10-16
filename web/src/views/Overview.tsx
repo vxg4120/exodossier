@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { getConflicts, getStats } from "../api/client";
 import type { ConflictRow, IngestRun } from "../api/types";
 import { useApi } from "../hooks/useApi";
-import { compact, fmtDate, fmtInt } from "../lib/format";
+import { fmtDate, fmtInt } from "../lib/format";
 import { CONFLICT_TABS } from "../lib/conflicts";
 import { runStatusMeta } from "../lib/dispositions";
 import { Panel } from "../components/Panel";
@@ -30,7 +30,7 @@ export function Overview() {
         </div>
       </header>
 
-      <Async state={stats} loadingLabel="Loading catalog telemetry">
+      <Async state={stats} loadingLabel="Loading catalog telemetry" loadingRows={10}>
         {(s) => (
           <>
             <div className="grid grid--stats" data-tour="stats">
@@ -38,7 +38,7 @@ export function Overview() {
                 lead
                 hero
                 label="Candidates"
-                value={compact(s.candidates)}
+                value={s.candidates}
                 sub={
                   <>
                     host stars <span className="num">{fmtInt(s.stars)}</span>
@@ -47,18 +47,18 @@ export function Overview() {
               />
               <StatTile
                 label="Crosswalk identifiers"
-                value={compact(s.identifiers)}
+                value={s.identifiers}
                 sub="TIC · TOI · CTOI · KOI · Gaia · HD · HIP"
               />
               <StatTile
                 label="Source assertions"
-                value={compact(s.source_assertions)}
+                value={s.source_assertions}
                 sub="per-publication provenance"
               />
               <StatTile
                 conflict
                 label="Disposition conflicts"
-                value={compact(s.conflicts.disposition)}
+                value={s.conflicts.disposition}
                 sub={
                   <>
                     incl. <span className="num">{s.conflicts.disposition_dramatic}</span> FALSE
@@ -97,7 +97,7 @@ export function Overview() {
                   Candidates where one catalog calls it a false positive while another confirms it
                   — the sharpest form of &ldquo;nobody agrees on a planet.&rdquo;
                 </p>
-                <Async state={dramatic} loadingLabel="Loading the dramatic cases">
+                <Async state={dramatic} loadingLabel="Loading the dramatic cases" loadingRows={3}>
                   {(page) => (
                     <DramaticList rows={page.rows} total={s.conflicts.disposition_dramatic} />
                   )}

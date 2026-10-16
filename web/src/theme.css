@@ -133,7 +133,8 @@ button {
   font-variant-numeric: tabular-nums;
 }
 .dash {
-  color: var(--ink-ghost);
+  /* --ink-ghost (3.18:1) is for rules and marks; a null placeholder is text */
+  color: var(--ink-faint);
 }
 .mono-hi {
   color: var(--ink);
@@ -283,7 +284,7 @@ button {
 }
 .navlink__idx {
   font-size: var(--fs-micro);
-  color: var(--ink-ghost);
+  color: var(--ink-faint);
   font-variant-numeric: tabular-nums;
 }
 .navlink__name {
@@ -367,6 +368,9 @@ button {
   border-bottom: 1px solid var(--rule);
 }
 .panel__title {
+  /* an h2 (one per plate, for the heading outline); the look stays the label */
+  margin: 0;
+  font-weight: 400;
   font-size: var(--fs-micro);
   letter-spacing: 0.13em;
   text-transform: uppercase;
@@ -595,6 +599,14 @@ button {
 .table-wrap {
   overflow-x: auto;
   width: 100%;
+  /* scroll-edge cues, CSS only: the two "local" covers ride with the content
+     and hide the two "scroll" shades once an edge is reached, so a shade shows
+     only on a side that has more table behind it. Tables sit on --surface. */
+  background:
+    linear-gradient(90deg, var(--surface) 40%, transparent) left / 28px 100% no-repeat local,
+    linear-gradient(270deg, var(--surface) 40%, transparent) right / 28px 100% no-repeat local,
+    linear-gradient(90deg, color-mix(in srgb, var(--ink-ghost) 55%, transparent), transparent) left / 16px 100% no-repeat scroll,
+    linear-gradient(270deg, color-mix(in srgb, var(--ink-ghost) 55%, transparent), transparent) right / 16px 100% no-repeat scroll;
 }
 .dtable {
   width: 100%;
@@ -800,7 +812,9 @@ button {
   font-size: var(--fs-xs);
   color: var(--ink-dim);
   border-bottom: 1px solid var(--rule);
-  max-width: 110ch;
+  /* ~80 characters a line, while the hairline still spans the panel: the cap
+     is right padding, not max-width (a max-width cut the rule short) */
+  padding-right: max(14px, calc(100% - 80ch));
 }
 .wrap-cell {
   white-space: normal;
@@ -1167,6 +1181,9 @@ button {
   color: var(--ink-dim);
 }
 .state__title {
+  /* an h2 in the error and empty states; a plain label while loading */
+  margin: 0;
+  font-weight: 400;
   font-size: var(--fs-sm);
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -1177,8 +1194,45 @@ button {
   color: var(--ink-faint);
   max-width: 48ch;
 }
+/* an echoed query keeps the visitor's own case inside the uppercase title */
+.state__q {
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--ink);
+}
 .state--error .state__title {
   color: var(--err);
+}
+/* loading skeleton: hairline-toned bars with a slow shimmer; the global
+   prefers-reduced-motion rule stops the animation */
+.skeleton {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 6px;
+}
+.skeleton__row {
+  display: block;
+  height: 12px;
+  border: 1px solid var(--rule);
+  background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface-3) 50%, var(--surface-2) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.2s linear infinite;
+}
+.skeleton__row:nth-child(3n + 2) {
+  width: 82%;
+}
+.skeleton__row:nth-child(3n) {
+  width: 64%;
+}
+@keyframes shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
 }
 .spinner {
   width: 16px;
@@ -1319,6 +1373,14 @@ button {
     border-right: none;
     border-bottom: 1px solid var(--rule-2);
     overflow-x: auto;
+    scrollbar-width: none;
+    /* right-edge fade: the last item is clipped mid-word otherwise, with
+       nothing saying the row scrolls */
+    -webkit-mask-image: linear-gradient(90deg, #000 85%, transparent);
+    mask-image: linear-gradient(90deg, #000 85%, transparent);
+  }
+  .rail::-webkit-scrollbar {
+    display: none;
   }
   .rail__nav {
     flex-direction: row;
@@ -1327,6 +1389,7 @@ button {
   .navlink {
     border-left: none;
     border-bottom: 2px solid transparent;
+    white-space: nowrap;
   }
   .navlink.is-active {
     border-left: none;
@@ -1349,6 +1412,11 @@ button {
 @media (max-width: 560px) {
   :root {
     --pad: 14px;
+    /* phones read the bottom type tiers one step up; desktop density stays */
+    --fs-micro: 11px;
+    --fs-xs: 12px;
+    --fs-sm: 13px;
+    --fs-base: 14px;
   }
   .grid--stats {
     grid-template-columns: 1fr;
@@ -1364,18 +1432,90 @@ button {
   .topbar__help {
     margin: 0 8px;
   }
+  /* claims: break between words, never inside one. word-break: break-word
+     let the table shrink the column to a few characters ("Fals / posi");
+     overflow-wrap only breaks a word that cannot fit on a line by itself, so
+     the table keeps its width and scrolls behind the edge cue instead. */
+  .claim__head {
+    flex-wrap: wrap;
+  }
+  .claim__val {
+    white-space: normal;
+    word-break: normal;
+    overflow-wrap: break-word;
+  }
+  /* panel head: meta drops to its own line instead of squeezing the title */
+  .panel__head {
+    flex-wrap: wrap;
+    align-items: flex-start;
+    row-gap: 4px;
+  }
+  .panel__meta {
+    flex-basis: 100%;
+  }
+  /* nav row: tighter links so more of the five fit before the fade */
+  .navlink {
+    grid-template-columns: auto 1fr;
+    padding: 9px 12px;
+  }
+  /* the stat strip gets its own scrolling row under the brand line: squeezed
+     between brand and clock it was a 41px sliver. The bar grows to two rows, so
+     the grid's first track goes auto. */
+  .app {
+    grid-template-rows: auto auto 1fr;
+  }
+  .topbar {
+    flex-wrap: wrap;
+  }
+  .topbar__brand {
+    min-height: var(--topbar-h);
+  }
+  .topbar__tele {
+    order: 3;
+    flex: 1 0 100%;
+    min-width: 0;
+    min-height: 32px;
+    border-top: 1px solid var(--rule);
+    /* right-edge fade: the strip scrolls, and says so */
+    -webkit-mask-image: linear-gradient(90deg, #000 85%, transparent);
+    mask-image: linear-gradient(90deg, #000 85%, transparent);
+  }
+  .tele {
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 6px;
+  }
 }
 
 /* comfortable touch targets on touch-first devices */
 @media (pointer: coarse) {
   .btn {
-    padding: 8px 12px;
+    padding: 11px 14px;
+  }
+  .dtable tbody td {
+    padding: 12px;
+  }
+  .assert-line,
+  .result-row {
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+  .example-list {
+    gap: 0;
+  }
+  .example-list li a,
+  .back-link {
+    display: block;
+    padding-top: 12px;
+    padding-bottom: 12px;
   }
   .tab {
     padding: 11px 16px;
   }
   .navlink {
-    padding: 12px 16px;
+    padding-top: 12px;
+    padding-bottom: 12px;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1415,13 +1555,13 @@ button {
 }
 .hm-axis-label {
   fill: var(--ink-faint);
-  font-size: 9px;
+  font-size: var(--fs-micro);
   font-family: var(--font-mono);
   letter-spacing: 0.06em;
 }
 .hm-axis-title {
   fill: var(--ink-dim);
-  font-size: 10px;
+  font-size: var(--fs-micro);
   font-family: var(--font-mono);
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -1668,13 +1808,16 @@ button {
   align-self: center;
   flex: none;
   margin: 0 14px;
-  width: 24px;
-  height: 24px;
+  /* a 36px target; a circle on phones, a "? Tour" pill from 768px up */
+  min-width: 36px;
+  height: 36px;
+  padding: 0;
+  gap: 7px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border: 1px solid var(--rule-2);
-  border-radius: 50%;
+  border-radius: 18px;
   background: var(--surface-2);
   color: var(--ink-dim);
   font-size: var(--fs-sm);
@@ -1685,6 +1828,20 @@ button {
 .topbar__help:hover {
   color: var(--signal);
   border-color: var(--signal-dim);
+}
+.topbar__help-word {
+  display: none;
+}
+@media (min-width: 768px) {
+  .topbar__help {
+    padding: 0 14px 0 12px;
+  }
+  .topbar__help-word {
+    display: inline;
+  }
+  .topbar__help:hover .topbar__help-word {
+    color: var(--signal);
+  }
 }
 
 .driver-popover.exo-tour {
@@ -1754,4 +1911,11 @@ button {
 }
 .driver-popover.exo-tour .driver-popover-arrow-side-bottom {
   border-bottom-color: var(--surface-2);
+}
+/* touch: the tour button rule is defined above in this section, so its
+   coarse override must come after it */
+@media (pointer: coarse) {
+  .driver-popover.exo-tour .driver-popover-footer-btn {
+    padding: 10px 14px;
+  }
 }

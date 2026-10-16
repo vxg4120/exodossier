@@ -40,7 +40,7 @@ export function Target() {
 
   return (
     <div className="view fadein">
-      <Async state={detail} loadingLabel="Resolving target">
+      <Async state={detail} loadingLabel="Resolving target" loadingRows={10}>
         {(t) => <TargetCard detail={t} />}
       </Async>
     </div>
@@ -55,7 +55,7 @@ function TargetCard({ detail }: { detail: TargetDetail }) {
   return (
     <div className="stack">
       <div className="inline" style={{ justifyContent: "space-between" }}>
-        <Link to="/search" className="hint">
+        <Link to="/search" className="hint back-link">
           ‹ Search
         </Link>
         <span className="hint">candidate #{candidate.candidate_id}</span>

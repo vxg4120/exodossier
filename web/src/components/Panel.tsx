@@ -15,7 +15,7 @@ export function Panel({ title, meta, children, flush, dataTour }: PanelProps) {
   return (
     <section className="panel" data-tour={dataTour}>
       <header className="panel__head">
-        <span className="panel__title">{title}</span>
+        <h2 className="panel__title">{title}</h2>
         {meta !== undefined ? <span className="panel__meta">{meta}</span> : null}
       </header>
       <div className={`panel__body${flush ? " panel__body--flush" : ""}`}>{children}</div>

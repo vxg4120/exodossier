@@ -64,7 +64,7 @@ export function Search() {
         flush
       >
         <Results
-          hasQuery={Boolean(debounced.trim())}
+          query={debounced.trim()}
           loading={search.loading}
           error={search.error}
           results={search.data?.results ?? []}
@@ -75,37 +75,53 @@ export function Search() {
   );
 }
 
+function Examples() {
+  return (
+    <div className="results-empty">
+      <span className="label">Try an example</span>
+      <ul className="example-list">
+        {EXAMPLES.map((e) => (
+          <li key={e.q}>
+            <Link to={`/target/${encodeURIComponent(e.q)}`}>{e.label}</Link>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function Results({
-  hasQuery,
+  query,
   loading,
   error,
   results,
   onPick,
 }: {
-  hasQuery: boolean;
+  query: string;
   loading: boolean;
   error: string | null;
   results: SearchResult[];
   onPick: (id: number) => void;
 }) {
-  if (!hasQuery) {
-    return (
-      <div className="results-empty">
-        <span className="label">Try an example</span>
-        <ul className="example-list">
-          {EXAMPLES.map((e) => (
-            <li key={e.q}>
-              <Link to={`/target/${encodeURIComponent(e.q)}`}>{e.label}</Link>
-            </li>
-          ))}
-        </ul>
-      </div>
-    );
-  }
+  if (!query) return <Examples />;
   if (error) return <ErrorState message={error} />;
-  if (loading) return <Loading label="Searching" />;
+  if (loading) return <Loading label="Searching" rows={4} />;
   if (results.length === 0)
-    return <EmptyState title="No matches" message="Nothing in the graph matches that." />;
+    // Echo the query (in its own case: the title is uppercased), say which forms resolve, and put
+    // the examples back — the placeholder that listed them is gone once something is typed.
+    return (
+      <>
+        <EmptyState
+          title={
+            <>
+              No matches for <q className="state__q">{query}</q>
+            </>
+          }
+          message="Search takes a TIC, TOI, CTOI or KOI number, a planet name or a host name — e.g. TIC 278892590, TOI-1836, K03728.01, Kepler-1517 b or TRAPPIST-1."
+        />
+        <Examples />
+      </>
+    );
 
   return (
     <ul className="results">
