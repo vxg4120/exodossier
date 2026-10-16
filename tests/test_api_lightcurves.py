@@ -279,3 +279,25 @@ def test_results_survive_the_graph_rebuild(planted, lc_db):
     others = [r for r in client.get("/api/lightcurves/results", params={"limit": 200}).json()
               ["rows"] if r["toi"] != "9001.01"]
     assert all(r["candidate_id"] is None for r in others)
+
+
+@pytest.mark.db
+def test_deleting_a_target_takes_its_runs(planted, lc_db):
+    """select_targets.persist() deletes targets the catalogs no longer select; their runs,
+    detections and FP scenarios go with them (ON DELETE CASCADE, migration 0007)."""
+    with lc_db.cursor() as cur:
+        cur.execute("SELECT target_id FROM target WHERE toi = '9001.01'")
+        tid = cur.fetchone()["target_id"]
+        cur.execute("INSERT INTO fp_scenario (target_id, tic_id, scenario, probability) "
+                    "SELECT target_id, tic_id, 'FPP', 0.1 FROM target WHERE target_id = %s",
+                    (tid,))
+        cur.execute("DELETE FROM target WHERE toi <> ALL(%s)",
+                    ([t for t in ("9002.01", "9003.01", "9004.01", "9005.01", "9006.01")],))
+        cur.execute("""SELECT (SELECT count(*) FROM pipeline_run WHERE target_id = %(t)s) AS runs,
+                              (SELECT count(*) FROM detection d JOIN pipeline_run r
+                                   USING (pipeline_run_id) WHERE r.target_id = %(t)s) AS dets,
+                              (SELECT count(*) FROM detection WHERE tic_id = 990100001) AS orphans,
+                              (SELECT count(*) FROM fp_scenario WHERE target_id = %(t)s) AS fps""",
+                    {"t": tid})
+        assert cur.fetchone() == {"runs": 0, "dets": 0, "orphans": 0, "fps": 0}
+    assert client.get("/api/lightcurves/summary").json()["targets"] == 5

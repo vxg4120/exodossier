@@ -51,3 +51,16 @@ CREATE INDEX IF NOT EXISTS target_candidate_id_idx ON target (candidate_id);
 COMMENT ON COLUMN target.candidate_id IS
     'Cached hint from selection time; may be stale after a graph rebuild. Resolve the current '
     'candidate from toi through entity_identifier.';
+
+-- Targets now persist across rebuilds, so select_targets.persist() deleting a target the catalogs
+-- no longer select (`DELETE FROM target WHERE toi <> ALL(...)`) must take that target's runs,
+-- detections and FP scenarios with it instead of failing on these references.
+ALTER TABLE pipeline_run DROP CONSTRAINT IF EXISTS pipeline_run_target_id_fkey;
+ALTER TABLE pipeline_run ADD CONSTRAINT pipeline_run_target_id_fkey
+    FOREIGN KEY (target_id) REFERENCES target ON DELETE CASCADE;
+ALTER TABLE fp_scenario DROP CONSTRAINT IF EXISTS fp_scenario_target_id_fkey;
+ALTER TABLE fp_scenario ADD CONSTRAINT fp_scenario_target_id_fkey
+    FOREIGN KEY (target_id) REFERENCES target ON DELETE CASCADE;
+ALTER TABLE detection DROP CONSTRAINT IF EXISTS detection_pipeline_run_id_fkey;
+ALTER TABLE detection ADD CONSTRAINT detection_pipeline_run_id_fkey
+    FOREIGN KEY (pipeline_run_id) REFERENCES pipeline_run ON DELETE CASCADE;
