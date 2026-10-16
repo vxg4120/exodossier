@@ -5,6 +5,10 @@ the 400/404 paths and the empty state.
 outcome) inside a transaction that is rolled back at teardown, after emptying the Wave 2 tables in
 that same transaction, so they run the same on a database with a real run and on one without.
 The API's get_db dependency is pointed at that transaction for the duration of a test.
+
+The rebuild test runs identity/build.py's own reset (TRUNCATE of the derived graph, RESTART
+IDENTITY CASCADE) inside that transaction and checks that the results survive it and re-resolve
+to the re-inserted candidate's new id.
 """
 
 import warnings
@@ -82,6 +86,13 @@ def _wipe(cur):
         cur.execute(f"DELETE FROM {table}")
 
 
+def _toi_link(cur, cand, toi):
+    """The crosswalk row identity/build.py writes for a TOI (exofop and nea each assert one)."""
+    for source in ("exofop", "nea"):
+        cur.execute("INSERT INTO entity_identifier (candidate_id, id_type, id_value, source) "
+                    "VALUES (%s, 'toi', %s, %s)", (cand, toi, source))
+
+
 def _plant(cur, n, cohort, toi, period, dets, status="ok"):
     tic = 990100000 + n
     cur.execute("INSERT INTO star (tic_id, canonical_name) VALUES (%s, %s) RETURNING star_id",
@@ -90,6 +101,7 @@ def _plant(cur, n, cohort, toi, period, dets, status="ok"):
     cur.execute("INSERT INTO candidate (star_id, canonical_name) VALUES (%s, %s) "
                 "RETURNING candidate_id", (star, f"LC-TEST-{n} b"))
     cand = cur.fetchone()["candidate_id"]
+    _toi_link(cur, cand, toi)
     cur.execute(
         """INSERT INTO target (candidate_id, tic_id, toi, cohort, stratum, tfopwg_disp,
                known_period_days, known_epoch_bjd, known_depth_ppm, select_rule)
@@ -210,3 +222,60 @@ def test_empty_state(lc_db):
     assert s["last_run_at"] is None
     r = client.get("/api/lightcurves/results").json()
     assert r["rows"] == [] and r["total"] == 0
+
+
+def test_build_truncate_list_spares_the_result_tables():
+    """The rebuild's TRUNCATE names only the derived graph, never a Wave 2 table."""
+    from identity.build import _DERIVED_TABLES
+
+    named = {t.strip() for t in _DERIVED_TABLES.split(",")}
+    assert named.isdisjoint({"target", "pipeline_run", "detection", "fp_scenario",
+                             "lightcurve_file"})
+
+
+@pytest.mark.db
+def test_results_survive_the_graph_rebuild(planted, lc_db):
+    """The nightly rebuild truncates the graph with CASCADE and renumbers candidates. The results
+    must survive it, and once the planet is back under a NEW candidate_id the row links there."""
+    from identity.build import _reset
+
+    before = client.get("/api/lightcurves/results", params={"limit": 200}).json()
+    old_id = planted["hit"]
+    assert any(r["candidate_id"] == old_id for r in before["rows"])
+
+    with lc_db.cursor() as cur:
+        cur.execute("SELECT max(candidate_id) AS m FROM candidate")
+        high = cur.fetchone()["m"]
+    _reset(lc_db)  # exactly the build's TRUNCATE ... RESTART IDENTITY CASCADE
+
+    # The graph is gone, the results are not; with no crosswalk nothing links.
+    s = client.get("/api/lightcurves/summary").json()
+    assert (s["targets"], s["processed"]) == (6, 4)
+    assert s["gold_planets"]["recovered"] == 1
+    gone = client.get("/api/lightcurves/results", params={"limit": 200}).json()["rows"]
+    assert len(gone) == 6 and all(r["candidate_id"] is None for r in gone)
+    assert {r["name"] for r in gone} >= {"TOI-9001.01"}  # renders without a link
+
+    # The rebuild re-inserts the planet; push the identity past the old ids so it gets a new one.
+    with lc_db.cursor() as cur:
+        cur.execute("SELECT setval(pg_get_serial_sequence('candidate', 'candidate_id'), %s)",
+                    (high + 1000,))
+        cur.execute("INSERT INTO star (tic_id, canonical_name) VALUES (990100001, 'LC-TEST-1') "
+                    "RETURNING star_id")
+        star = cur.fetchone()["star_id"]
+        cur.execute("INSERT INTO candidate (star_id, canonical_name) VALUES (%s, 'LC-TEST-1 b') "
+                    "RETURNING candidate_id", (star,))
+        new_id = cur.fetchone()["candidate_id"]
+        _toi_link(cur, new_id, "9001.01")
+    assert new_id != old_id
+
+    row = next(r for r in client.get("/api/lightcurves/results", params={"limit": 200}).json()
+               ["rows"] if r["toi"] == "9001.01")
+    assert row["candidate_id"] == new_id and row["name"] == "LC-TEST-1 b"
+    assert row["verdict"] == "recovered"
+    assert client.get(f"/api/lightcurves/target/{new_id}").json()["toi"] == "9001.01"
+    assert client.get(f"/api/target/{new_id}").status_code == 200
+    # the other five still have no candidate in the rebuilt graph and stay unlinked
+    others = [r for r in client.get("/api/lightcurves/results", params={"limit": 200}).json()
+              ["rows"] if r["toi"] != "9001.01"]
+    assert all(r["candidate_id"] is None for r in others)
