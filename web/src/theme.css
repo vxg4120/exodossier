@@ -1189,6 +1189,37 @@ button {
 .state--error .state__title {
   color: var(--err);
 }
+/* loading skeleton: hairline-toned bars with a slow shimmer; the global
+   prefers-reduced-motion rule stops the animation */
+.skeleton {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 6px;
+}
+.skeleton__row {
+  display: block;
+  height: 12px;
+  border: 1px solid var(--rule);
+  background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface-3) 50%, var(--surface-2) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.2s linear infinite;
+}
+.skeleton__row:nth-child(3n + 2) {
+  width: 82%;
+}
+.skeleton__row:nth-child(3n) {
+  width: 64%;
+}
+@keyframes shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
 .spinner {
   width: 16px;
   height: 16px;

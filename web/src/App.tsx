@@ -121,7 +121,7 @@ export default function App() {
       </nav>
 
       <main className="main">
-        <Suspense fallback={<Loading label="Loading view" />}>
+        <Suspense fallback={<Loading label="Loading view" rows={6} />}>
           <Routes>
             <Route path="/" element={<Overview />} />
             <Route path="/search" element={<Search />} />

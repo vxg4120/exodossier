@@ -103,7 +103,7 @@ function Results({
     );
   }
   if (error) return <ErrorState message={error} />;
-  if (loading) return <Loading label="Searching" />;
+  if (loading) return <Loading label="Searching" rows={4} />;
   if (results.length === 0)
     return <EmptyState title="No matches" message="Nothing in the graph matches that." />;
 

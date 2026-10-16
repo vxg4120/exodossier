@@ -40,7 +40,7 @@ export function Target() {
 
   return (
     <div className="view fadein">
-      <Async state={detail} loadingLabel="Resolving target">
+      <Async state={detail} loadingLabel="Resolving target" loadingRows={10}>
         {(t) => <TargetCard detail={t} />}
       </Async>
     </div>

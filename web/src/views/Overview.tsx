@@ -30,7 +30,7 @@ export function Overview() {
         </div>
       </header>
 
-      <Async state={stats} loadingLabel="Loading catalog telemetry">
+      <Async state={stats} loadingLabel="Loading catalog telemetry" loadingRows={10}>
         {(s) => (
           <>
             <div className="grid grid--stats" data-tour="stats">
@@ -97,7 +97,7 @@ export function Overview() {
                   Candidates where one catalog calls it a false positive while another confirms it
                   — the sharpest form of &ldquo;nobody agrees on a planet.&rdquo;
                 </p>
-                <Async state={dramatic} loadingLabel="Loading the dramatic cases">
+                <Async state={dramatic} loadingLabel="Loading the dramatic cases" loadingRows={3}>
                   {(page) => (
                     <DramaticList rows={page.rows} total={s.conflicts.disposition_dramatic} />
                   )}
