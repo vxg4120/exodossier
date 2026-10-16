@@ -1186,6 +1186,12 @@ button {
   color: var(--ink-faint);
   max-width: 48ch;
 }
+/* an echoed query keeps the visitor's own case inside the uppercase title */
+.state__q {
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--ink);
+}
 .state--error .state__title {
   color: var(--err);
 }

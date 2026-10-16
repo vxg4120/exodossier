@@ -57,7 +57,7 @@ export function ErrorState({ message, onRetry }: { message: string; onRetry?: ()
   );
 }
 
-export function EmptyState({ title, message }: { title: string; message?: string }) {
+export function EmptyState({ title, message }: { title: ReactNode; message?: ReactNode }) {
   return (
     <div className="state">
       <span className="state__title">{title}</span>
