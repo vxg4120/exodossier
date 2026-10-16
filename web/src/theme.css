@@ -809,7 +809,9 @@ button {
   font-size: var(--fs-xs);
   color: var(--ink-dim);
   border-bottom: 1px solid var(--rule);
-  max-width: 110ch;
+  /* ~80 characters a line, while the hairline still spans the panel: the cap
+     is right padding, not max-width (a max-width cut the rule short) */
+  padding-right: max(14px, calc(100% - 80ch));
 }
 .wrap-cell {
   white-space: normal;
