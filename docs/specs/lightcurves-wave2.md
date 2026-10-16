@@ -37,6 +37,11 @@ tables hold nothing.
   `select_targets.persist` upserts `ON CONFLICT (toi)` and refreshes the hint. Rejected: a
   separate schema for the Wave 2 tables (more moving parts for the same effect) and re-running
   selection after each build (`pipeline_run` and `detection` would still be wiped).
+- 2026-10-16 (coordinator review, Claude implemented): **Deleting a target cascades.** 0007 also
+  re-creates `pipeline_run.target_id`, `fp_scenario.target_id` and `detection.pipeline_run_id`
+  with ON DELETE CASCADE, so `select_targets.persist()` can drop a target the catalogs no longer
+  select now that targets persist. Rows whose TOI no longer resolves render plain
+  (`DataTable isLinkable`).
 - 2026-10-16 (Claude): **Verdict badges reuse the disposition badge tones** (confirmed for a match,
   known for a harmonic or an off-period signal, unknown for a non-result, the conflict chip for a
   failed run). No new colours and no font rules (another branch owns heading fonts).
@@ -100,7 +105,8 @@ tables hold nothing.
 
 ## Acceptance criteria
 - [x] `DATABASE_URL=<any exo db> python -m pytest -q tests/test_api_lightcurves.py` passes
-      (7 tests: grading, summary shape, pagination/sort/cohort, 400/422/404, empty state).
+      (10 tests: grading x3, summary shape, pagination/sort/cohort, 400/422/404, empty state,
+      the build's TRUNCATE list, survival of the rebuild, cascade on target delete).
 - [x] `python -m pytest -q tests` shows no new failures against the same database.
 - [x] `cd web && pnpm run build` exits 0.
 - [x] `curl -s localhost:8700/api/lightcurves/summary | jq -r .state` prints `empty` against a
