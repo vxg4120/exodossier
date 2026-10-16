@@ -186,14 +186,17 @@ button {
   border-right: 1px solid var(--rule-2);
 }
 .topbar__mark {
-  font-size: var(--fs-sm);
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
+  /* the byline: Fraunces with the wonk on, as on orbital */
+  font-family: var(--font-display);
+  font-size: var(--fs-md);
+  font-weight: 620;
+  font-variation-settings: "SOFT" 0, "WONK" 1;
+  letter-spacing: 0.01em;
   color: var(--ink);
-  font-weight: 600;
   display: flex;
   align-items: center;
   gap: 7px;
+  white-space: nowrap;
 }
 .topbar__mark .dot {
   width: 7px;
@@ -342,10 +345,13 @@ button {
   padding-bottom: 12px;
 }
 .vhead__title {
-  font-size: var(--fs-lg);
-  letter-spacing: 0.02em;
-  color: var(--ink);
+  /* the view's byline: Fraunces, wonk on; a chapter head, not a label */
+  font-family: var(--font-display);
+  font-size: var(--fs-xl);
   font-weight: 600;
+  font-variation-settings: "SOFT" 0, "WONK" 1;
+  letter-spacing: 0.005em;
+  color: var(--ink);
   margin: 0;
 }
 .vhead__desc {
@@ -371,13 +377,15 @@ button {
   border-bottom: 1px solid var(--rule);
 }
 .panel__title {
-  /* an h2 (one per plate, for the heading outline); the look stays the label */
+  /* an h2 (one per plate, for the heading outline), set in Fraunces as on orbital;
+     the margin reset keeps the class-based look */
   margin: 0;
-  font-weight: 400;
-  font-size: var(--fs-micro);
-  letter-spacing: 0.13em;
-  text-transform: uppercase;
-  color: var(--ink-dim);
+  font-family: var(--font-display);
+  font-size: var(--fs-md);
+  font-weight: 560;
+  font-variation-settings: "SOFT" 0, "WONK" 0;
+  letter-spacing: 0.005em;
+  color: var(--ink);
 }
 .panel__meta {
   font-size: var(--fs-micro);
@@ -455,13 +463,17 @@ button {
   color: var(--ink-faint);
 }
 .stat__value {
+  /* hero numerals speak Fraunces; column data everywhere else stays mono */
+  font-family: var(--font-display);
   font-size: var(--fs-xl);
   color: var(--ink);
   line-height: 1.05;
-  font-weight: 600;
+  font-weight: 580;
+  font-variation-settings: "SOFT" 0, "WONK" 0;
 }
 .stat__value.is-hero {
   font-size: var(--fs-hero);
+  font-variation-settings: "SOFT" 0, "WONK" 1;
 }
 .stat__value.is-conflict {
   color: var(--conflict);
@@ -1311,9 +1323,12 @@ button {
   line-height: 1.7;
 }
 .prose h2 {
+  font-family: var(--font-display);
   font-size: var(--fs-md);
+  font-weight: 560;
+  font-variation-settings: "SOFT" 0, "WONK" 0;
   color: var(--ink);
-  letter-spacing: 0.02em;
+  letter-spacing: 0.005em;
   margin: 22px 0 8px;
 }
 .prose h2:first-child {
