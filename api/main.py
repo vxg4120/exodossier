@@ -15,7 +15,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routers import attribution, conflicts, search, stats, target, twoskies
+from api.routers import attribution, conflicts, lightcurves, search, stats, target, twoskies
 
 
 @asynccontextmanager
@@ -51,6 +51,7 @@ app.include_router(target.router, prefix="/api")
 app.include_router(conflicts.router, prefix="/api")
 app.include_router(attribution.router, prefix="/api")
 app.include_router(twoskies.router, prefix="/api")
+app.include_router(lightcurves.router, prefix="/api")
 
 
 @app.get("/api/health", tags=["health"])

@@ -149,3 +149,82 @@ export interface Attribution {
   sources: AttributionSource[];
   notes: string;
 }
+
+/* ---- light-curve pipeline (/api/lightcurves) ------------------------------ */
+export type LightcurveCohort = "gold_planet" | "gold_fp" | "discovery";
+
+export interface LightcurveDetection {
+  method: string;
+  period_days: number | null;
+  depth_ppm: number | null;
+  duration_hr: number | null;
+  snr: number | null;
+  sde: number | null;
+}
+
+export interface LightcurveCohortSummary {
+  label: string;
+  description: string;
+  targets: number;
+  processed: number;
+  by_verdict: Record<string, number>;
+}
+
+export interface LightcurveSummary {
+  state: "ready" | "empty";
+  targets: number;
+  processed: number;
+  not_processed: number;
+  pending: number;
+  gold_planets: { targets: number; recovered: number; recovered_exact: number };
+  gold_false_positives: { targets: number; with_signal: number };
+  discovery: { targets: number; with_signal: number };
+  by_cohort: Record<LightcurveCohort, LightcurveCohortSummary>;
+  last_run_at: string | null;
+  data_vintage: string | null;
+  run_attempts: number;
+  median_runtime_s: number | null;
+  lightcurve_files: number;
+  lightcurve_stars: number;
+  last_fetch_at: string | null;
+  rules: { period_tolerance: number; snr_min: number; statement: string };
+  verdicts: Record<string, string>;
+}
+
+export interface LightcurveRow {
+  target_id: number;
+  /** The candidate this TOI resolves to in the current graph; null when it no longer resolves. */
+  candidate_id: number | null;
+  name: string;
+  host: string | null;
+  tic_id: string;
+  toi: string | null;
+  cohort: LightcurveCohort;
+  stratum: string | null;
+  tfopwg_disp: string | null;
+  canonical_disp: string | null;
+  known_period_days: number | null;
+  known_depth_ppm: number | null;
+  tmag: number | null;
+  run_status: string | null;
+  n_sectors: number | null;
+  baseline_days: number | null;
+  runtime_s: number | null;
+  data_vintage: string | null;
+  finished_at: string | null;
+  verdict: string;
+  match: number | null;
+  phase_offset: number | null;
+  reason: string | null;
+  best: LightcurveDetection | null;
+  single_event: LightcurveDetection | null;
+}
+
+export interface LightcurveResults {
+  rows: LightcurveRow[];
+  total: number;
+  limit: number;
+  offset: number;
+  sort: string;
+  cohort: LightcurveCohort | null;
+}

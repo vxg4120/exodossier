@@ -12,11 +12,20 @@ interface DataTableProps<Row> {
   rows: Row[];
   rowKey: (row: Row) => string | number;
   onRowClick?: (row: Row) => void;
+  /** With onRowClick, which rows actually link; the others render as plain rows (no link
+      styling, not focusable, no handler). Every row links when omitted. */
+  isLinkable?: (row: Row) => boolean;
 }
 
 /** Dense hairline table. Numeric columns are right-aligned tabular. When onRowClick is set the
     whole row is a keyboard-reachable deep link. */
-export function DataTable<Row>({ columns, rows, rowKey, onRowClick }: DataTableProps<Row>) {
+export function DataTable<Row>({
+  columns,
+  rows,
+  rowKey,
+  onRowClick,
+  isLinkable,
+}: DataTableProps<Row>) {
   return (
     <div className="table-wrap">
       <table className="dtable">
@@ -31,19 +40,20 @@ export function DataTable<Row>({ columns, rows, rowKey, onRowClick }: DataTableP
         </thead>
         <tbody>
           {rows.map((row) => {
-            const clickable = Boolean(onRowClick);
+            const onClick = onRowClick && (isLinkable?.(row) ?? true) ? onRowClick : undefined;
+            const clickable = Boolean(onClick);
             return (
               <tr
                 key={rowKey(row)}
                 className={clickable ? "is-link" : undefined}
-                onClick={onRowClick ? () => onRowClick(row) : undefined}
+                onClick={onClick ? () => onClick(row) : undefined}
                 tabIndex={clickable ? 0 : undefined}
                 onKeyDown={
-                  onRowClick
+                  onClick
                     ? (e) => {
                         if (e.key === "Enter" || e.key === " ") {
                           e.preventDefault();
-                          onRowClick(row);
+                          onClick(row);
                         }
                       }
                     : undefined

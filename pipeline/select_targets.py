@@ -19,7 +19,7 @@ The known catalog ephemeris (period, epoch, depth, duration) is carried onto eac
 the ExoFOP TOI list (the live TFOPWG source) as the recovery answer key. Epoch is stored as the
 catalog's full BJD; the pipeline converts to BTJD (BJD - 2457000) when grading against TESS time.
 
-Idempotent: re-running upserts by candidate_id (stable target_id, so downstream pipeline_run rows
+Idempotent: re-running upserts by TOI (stable target_id, so downstream pipeline_run rows
 survive) and deletes any target no longer selected. The graph is static, so a re-run is a no-op.
 """
 
@@ -172,8 +172,12 @@ def select_targets(conn) -> list[dict]:
 
 
 def persist(conn, selection: list[dict]) -> None:
-    """Upsert the selection into `target` (stable target_id per candidate) and delete any target no
-    longer selected. Committed by the caller / here."""
+    """Upsert the selection into `target` (stable target_id per TOI) and delete any target no longer
+    selected. Committed by the caller / here.
+
+    The TOI is the key, not candidate_id: the nightly graph rebuild truncates `candidate` with
+    RESTART IDENTITY, so candidate ids are renumbered while TOIs and TICs are not (migration 0007).
+    candidate_id is refreshed here as a cached hint only."""
     with conn.cursor() as cur:
         for r in selection:
             cur.execute(
@@ -184,8 +188,9 @@ def persist(conn, selection: list[dict]) -> None:
                 VALUES (%(candidate_id)s, %(tic_id)s, %(toi)s, %(cohort)s, %(stratum)s,
                     %(tfopwg_disp)s, %(canonical_disp)s, %(period_days)s, %(epoch_bjd)s,
                     %(depth_ppm)s, %(duration_hr)s, %(tmag)s, %(select_rule)s)
-                ON CONFLICT (candidate_id) DO UPDATE SET
-                    tic_id = EXCLUDED.tic_id, toi = EXCLUDED.toi, cohort = EXCLUDED.cohort,
+                ON CONFLICT (toi) DO UPDATE SET
+                    candidate_id = EXCLUDED.candidate_id, tic_id = EXCLUDED.tic_id,
+                    cohort = EXCLUDED.cohort,
                     stratum = EXCLUDED.stratum, tfopwg_disp = EXCLUDED.tfopwg_disp,
                     canonical_disp = EXCLUDED.canonical_disp,
                     known_period_days = EXCLUDED.known_period_days,
@@ -196,8 +201,8 @@ def persist(conn, selection: list[dict]) -> None:
                 """,
                 r,
             )
-        keep = [r["candidate_id"] for r in selection]
-        cur.execute("DELETE FROM target WHERE candidate_id <> ALL(%s)", (keep,))
+        keep = [r["toi"] for r in selection]
+        cur.execute("DELETE FROM target WHERE toi <> ALL(%s)", (keep,))
     conn.commit()
 
 

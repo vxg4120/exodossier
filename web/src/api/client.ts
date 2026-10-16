@@ -10,6 +10,9 @@ import type {
   Attribution,
   ConflictsResponse,
   ConflictType,
+  LightcurveCohort,
+  LightcurveResults,
+  LightcurveSummary,
   SearchResponse,
   SearchResult,
   Stats,
@@ -145,4 +148,48 @@ export function getConflicts(
 export function getAttribution(): Promise<Attribution> {
   if (MOCK) return delay(attributionFixture as Attribution);
   return realGet<Attribution>("/attribution");
+}
+
+/* Mock mode has no pipeline output to replay, so it answers the way an unpopulated database does:
+   the real empty state, not invented rows. */
+const EMPTY_LIGHTCURVE_SUMMARY: LightcurveSummary = {
+  state: "empty",
+  targets: 0,
+  processed: 0,
+  not_processed: 0,
+  pending: 0,
+  gold_planets: { targets: 0, recovered: 0, recovered_exact: 0 },
+  gold_false_positives: { targets: 0, with_signal: 0 },
+  discovery: { targets: 0, with_signal: 0 },
+  by_cohort: {} as LightcurveSummary["by_cohort"],
+  last_run_at: null,
+  data_vintage: null,
+  run_attempts: 0,
+  median_runtime_s: null,
+  lightcurve_files: 0,
+  lightcurve_stars: 0,
+  last_fetch_at: null,
+  rules: {
+    period_tolerance: 0.01,
+    snr_min: 7,
+    statement:
+      "A recovery is a BLS or TLS period within 1% of the catalog period, or a harmonic of it, at SNR >= 7.",
+  },
+  verdicts: {},
+};
+
+export function getLightcurveSummary(): Promise<LightcurveSummary> {
+  if (MOCK) return delay(EMPTY_LIGHTCURVE_SUMMARY);
+  return realGet<LightcurveSummary>("/lightcurves/summary");
+}
+
+export function getLightcurveResults(
+  limit: number,
+  offset: number,
+  cohort: LightcurveCohort | null,
+): Promise<LightcurveResults> {
+  if (MOCK) return delay({ rows: [], total: 0, limit, offset, sort: "cohort", cohort });
+  const params: Record<string, string | number> = { limit, offset };
+  if (cohort) params.cohort = cohort;
+  return realGet<LightcurveResults>("/lightcurves/results", params);
 }

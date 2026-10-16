@@ -11,6 +11,9 @@ const Overview = lazy(() => import("./views/Overview").then((m) => ({ default: m
 const Search = lazy(() => import("./views/Search").then((m) => ({ default: m.Search })));
 const Target = lazy(() => import("./views/Target").then((m) => ({ default: m.Target })));
 const Conflicts = lazy(() => import("./views/Conflicts").then((m) => ({ default: m.Conflicts })));
+const Lightcurves = lazy(() =>
+  import("./views/Lightcurves").then((m) => ({ default: m.Lightcurves })),
+);
 const FollowUp = lazy(() => import("./views/FollowUp").then((m) => ({ default: m.FollowUp })));
 const About = lazy(() => import("./views/About").then((m) => ({ default: m.About })));
 const NotFound = lazy(() => import("./views/NotFound").then((m) => ({ default: m.NotFound })));
@@ -19,8 +22,9 @@ const NAV = [
   { to: "/", idx: "00", name: "Overview", end: true },
   { to: "/search", idx: "01", name: "Search", end: false },
   { to: "/conflicts", idx: "02", name: "Conflicts", end: false },
-  { to: "/followup", idx: "03", name: "Follow-up", end: false },
-  { to: "/about", idx: "04", name: "About", end: false },
+  { to: "/lightcurves", idx: "03", name: "Light curves", end: false },
+  { to: "/followup", idx: "04", name: "Follow-up", end: false },
+  { to: "/about", idx: "05", name: "About", end: false },
 ];
 
 function Clock() {
@@ -130,6 +134,7 @@ export default function App() {
             <Route path="/search" element={<Search />} />
             <Route path="/target/:id" element={<Target />} />
             <Route path="/conflicts" element={<Conflicts />} />
+            <Route path="/lightcurves" element={<Lightcurves />} />
             <Route path="/followup" element={<FollowUp />} />
             <Route path="/about" element={<About />} />
             <Route path="*" element={<NotFound />} />
