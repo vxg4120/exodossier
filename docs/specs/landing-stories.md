@@ -167,3 +167,13 @@ giant >= 6, unknown radius.
   were not seen to transit, so the size bins mix measured and estimated radii; the panel says so.
   Most of the 55 new "giants" since Jul 15 are TESS transits (35), but microlensing and RV planets
   (KMTNet, MOA, OGLE, Keck, Gaia) carry estimated radii.
+- 2026-10-16 (Claude, exo review fixes) `/api/stories` is the first API reader of the raw tables,
+  so docs/specs/raw-retention.md now names it: the monthly keepers must stay and `KEEP_LATEST`
+  must stay at 2 or more, both pinned in tests/test_prune_snapshots.py. A refresh that finds a
+  source with no snapshot, or a newest snapshot that reads as empty (a TRUNCATE committed
+  mid-refresh), raises `SnapshotsUnavailable`, so the cache keeps its payload; only a cold start
+  with nothing cached answers with the empty payload, uncached. The compute reads in one
+  REPEATABLE READ transaction, so the nightly DELETE cannot split it. Both raw tables allow NULL
+  and duplicate keys, so every query drops NULL `pl_name`/`toi` and keeps one row per name per
+  run (lowest `raw_id`), and two OK pulls on one UTC date collapse to the newer one. The live
+  payload was identical before and after these changes.

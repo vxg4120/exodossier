@@ -93,10 +93,36 @@ def test_a_table_with_no_ok_run_keeps_everything():
 
 
 def test_keeping_no_run_is_refused():
-    # identity/build.py and identity/assertions.py read the newest OK run.
+    # identity/build.py and identity/assertions.py read the newest OK run (and /api/stories
+    # needs two; see test_keep_latest_leaves_api_stories_a_comparison).
     assert KEEP_LATEST >= 1
     with pytest.raises(ValueError, match="newest OK run"):
         runs_to_drop([_run(1, 9, 1)], keep_latest=0)
+
+
+def test_the_snapshots_that_api_stories_compares_are_kept():
+    """/api/stories (api/stories.py) diffs raw_pscomppars and raw_exofop_toi across runs: the
+    oldest kept run is its baseline, each month's first OK run is a point on the confirmed-list
+    series and the start of "this month", and the newest runs are today's list and the one
+    before it. A nightly-shaped history from July 15 to October 15 must keep all of them."""
+    days = [(7, d) for d in range(15, 32)] + [(8, d) for d in range(1, 32)]
+    days += [(9, d) for d in range(1, 31)] + [(10, d) for d in range(1, 16)]
+    runs = [_run(i, m, d) for i, (m, d) in enumerate(days, start=1)]
+    by_day = {(m, d): i for i, (m, d) in enumerate(days, start=1)}
+    kept = {r.run_id for r in runs} - set(_ids(runs_to_drop(runs)))
+    monthly = {by_day[(7, 15)], by_day[(8, 1)], by_day[(9, 1)], by_day[(10, 1)]}
+    newest = {by_day[(10, 13)], by_day[(10, 14)], by_day[(10, 15)]}
+    assert kept == monthly | newest
+
+
+def test_keep_latest_leaves_api_stories_a_comparison():
+    """On the morning of the 1st the newest run is also the month's first, and /api/stories
+    measures "this month" from the run before it, which only the newest-N rule keeps. With
+    KEEP_LATEST at 1 that run is dropped and the window loses its comparison."""
+    assert KEEP_LATEST >= 2
+    runs = [_run(1, 9, 1), _run(2, 9, 29), _run(3, 9, 30), _run(4, 10, 1)]
+    assert 3 not in _ids(runs_to_drop(runs))
+    assert 3 in _ids(runs_to_drop(runs, keep_latest=1))
 
 
 def test_every_raw_table_in_the_migrations_is_pruned():

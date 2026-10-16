@@ -3,7 +3,12 @@
 Every ingest run lands a FULL copy of its source in raw_*. Nothing ever deleted one, yet every
 nightly reader of these tables wants only the newest OK run (identity/build.py and
 identity/assertions.py both select max(ingest_run_id) among OK runs). By 2026-10-09 the older
-copies were 6.2 GB of the 6.4 GB exo database. Ported from the satellite platform's
+copies were 6.2 GB of the 6.4 GB exo database.
+
+One reader compares runs: GET /api/stories (api/stories.py) diffs raw_pscomppars and
+raw_exofop_toi across every retained OK run. It depends on the monthly keepers (its series
+points and its "this month" baseline) and on the newest two runs, so the monthly keepers must
+stay and KEEP_LATEST must stay at 2 or more. Ported from the satellite platform's
 scripts/prune_snapshots.py, which has bounded the oei raw tables since 2026-10-01; see
 docs/specs/raw-retention.md.
 
@@ -36,8 +41,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from common.db import get_autocommit_conn  # noqa: E402
 
-# Every nightly reader takes only the newest OK run, so one would do. Three leaves slack to look
-# back at the last few pulls by hand.
+# Every nightly reader takes only the newest OK run, but /api/stories compares the newest run
+# with the one before it on the morning of the 1st, so never set this below 2. Three leaves slack
+# to look back at the last few pulls by hand.
 KEEP_LATEST = 3
 
 # The ledger statuses that are final: runlog.finish_run writes one of them once and nothing

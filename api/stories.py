@@ -14,6 +14,15 @@ Two snapshot series feed it:
 
 The API returns facts (counts, dates, names); the SPA phrases them. Read-only throughout. The
 pure helpers below take plain Python values so they are tested without a database.
+
+Both raw tables allow duplicate and NULL keys, so every query keys a run by its non-NULL names
+(``pl_name``, ``toi``) and keeps one row per name: the one with the lowest ``raw_id``.
+
+A refresh that finds the newest snapshots empty raises ``SnapshotsUnavailable`` instead of
+returning an empty payload. TRUNCATE is not MVCC-safe, so a future TRUNCATE-based compaction that
+commits mid-refresh makes the tables look empty to a reader that is already running; raising
+keeps the previous payload in ``RefreshingCache``. The REPEATABLE READ snapshot covers the
+nightly DELETE, which is MVCC-safe.
 """
 
 from __future__ import annotations
@@ -32,6 +41,12 @@ DROPPED = "DROPPED"  # not on the TOI list at the later snapshot
 
 CONFIRMED_CODES = ("CP", "KP")
 RULED_OUT_CODES = ("FP", "FA")
+
+
+class SnapshotsUnavailable(RuntimeError):
+    """The retained snapshots look empty, which a real archive never is. Raised so that a refresh
+    fails and the cache keeps serving the payload it has."""
+
 
 NEWEST_SHOWN = 12
 ALERT_MONTHS = 15
@@ -102,6 +117,16 @@ def month_baseline(snapshots: list[dict]) -> dict | None:
     in_month = [s for s in snapshots if s["date"][:7] == newest["date"][:7]]
     first = in_month[0]
     return first if first is not newest else snapshots[-2]
+
+
+def one_per_date(snapshots: list[dict]) -> list[dict]:
+    """Keep the newest snapshot of each UTC date, so the series never repeats a date (two OK
+    pulls on one day would otherwise draw two points at one x and give React duplicate keys).
+    ``snapshots`` is oldest first; so is the result."""
+    newest: dict[str, dict] = {}
+    for s in snapshots:
+        newest[s["date"]] = s  # a later run of the same date replaces the earlier one
+    return list(newest.values())
 
 
 def membership_changes(
@@ -188,7 +213,7 @@ def _snapshots(cur: psycopg.Cursor) -> dict[str, list[dict]]:
                 "date": row["finished_at"].astimezone(dt.UTC).date().isoformat(),
             }
         )
-    return out
+    return {key: one_per_date(snaps) for key, snaps in out.items()}
 
 
 def _confirmed(cur: psycopg.Cursor, snaps: list[dict]) -> dict[str, Any]:
@@ -205,19 +230,21 @@ def _confirmed(cur: psycopg.Cursor, snaps: list[dict]) -> dict[str, Any]:
 
     cur.execute(
         """
-        SELECT ingest_run_id, count(*) AS n FROM raw_pscomppars
-        WHERE ingest_run_id = ANY(%(runs)s) GROUP BY ingest_run_id
+        SELECT ingest_run_id, count(DISTINCT pl_name) AS n FROM raw_pscomppars
+        WHERE ingest_run_id = ANY(%(runs)s) AND pl_name IS NOT NULL GROUP BY ingest_run_id
         """,
         {"runs": run_ids},
     )
     counts = {r["ingest_run_id"]: r["n"] for r in cur.fetchall()}
+    if any(counts.get(run, 0) == 0 for run in run_ids):
+        raise SnapshotsUnavailable("a retained pscomppars snapshot has no planets")
 
     # Only the names missing from some snapshot can have moved; everything else is on every list.
     cur.execute(
         """
-        SELECT pl_name, array_agg(ingest_run_id ORDER BY ingest_run_id) AS runs
+        SELECT pl_name, array_agg(DISTINCT ingest_run_id ORDER BY ingest_run_id) AS runs
         FROM raw_pscomppars
-        WHERE ingest_run_id = ANY(%(runs)s)
+        WHERE ingest_run_id = ANY(%(runs)s) AND pl_name IS NOT NULL
         GROUP BY pl_name
         HAVING count(DISTINCT ingest_run_id) < %(n)s
         """,
@@ -245,9 +272,11 @@ def _confirmed(cur: psycopg.Cursor, snaps: list[dict]) -> dict[str, Any]:
     if added:
         cur.execute(
             """
-            SELECT pl_name, hostname, disc_facility, planet_radius_re, period_days
+            SELECT DISTINCT ON (pl_name)
+                   pl_name, hostname, disc_facility, planet_radius_re, period_days
             FROM raw_pscomppars
             WHERE ingest_run_id = %(run)s AND pl_name = ANY(%(names)s)
+            ORDER BY pl_name, raw_id
             """,
             {"run": newest["run"], "names": added},
         )
@@ -287,11 +316,17 @@ def _confirmed(cur: psycopg.Cursor, snaps: list[dict]) -> dict[str, Any]:
     }
 
 
-_TRANSITIONS_SQL = """
-WITH b AS (SELECT toi, tic_id, tfopwg_disposition AS d FROM raw_exofop_toi
-           WHERE ingest_run_id = %(before)s),
-     a AS (SELECT toi, tic_id, tfopwg_disposition AS d FROM raw_exofop_toi
-           WHERE ingest_run_id = %(after)s)
+# One row per TOI in one run: NULL TOIs dropped, duplicates resolved to the lowest raw_id.
+_TOI_RUN = """
+SELECT DISTINCT ON (toi) toi, tic_id, tfopwg_disposition AS d, extra
+FROM raw_exofop_toi
+WHERE ingest_run_id = %({run})s AND toi IS NOT NULL
+ORDER BY toi, raw_id
+"""
+
+_TRANSITIONS_SQL = f"""
+WITH b AS ({_TOI_RUN.format(run="before")}),
+     a AS ({_TOI_RUN.format(run="after")})
 SELECT CASE WHEN b.toi IS NULL THEN %(new)s ELSE b.d END AS from_code,
        CASE WHEN a.toi IS NULL THEN %(dropped)s ELSE a.d END AS to_code,
        count(*) AS n
@@ -323,13 +358,12 @@ def _toi(cur: psycopg.Cursor, snaps: list[dict]) -> dict[str, Any]:
     baseline, newest = snaps[0], snaps[-1]
 
     if len(snaps) >= 2:
-        demoted_sql = """
-            SELECT a.toi, a.tic_id, b.tfopwg_disposition AS from_code,
-                   a.tfopwg_disposition AS to_code
-            FROM raw_exofop_toi b
-            JOIN raw_exofop_toi a ON a.toi = b.toi AND a.ingest_run_id = %(after)s
-            WHERE b.ingest_run_id = %(before)s
-              AND b.tfopwg_disposition = ANY(%(was)s) AND a.tfopwg_disposition = ANY(%(now)s)
+        demoted_sql = f"""
+            WITH b AS ({_TOI_RUN.format(run="before")}),
+                 a AS ({_TOI_RUN.format(run="after")})
+            SELECT a.toi, a.tic_id, b.d AS from_code, a.d AS to_code
+            FROM b JOIN a USING (toi)
+            WHERE b.d = ANY(%(was)s) AND a.d = ANY(%(now)s)
             ORDER BY a.toi
         """
         cur.execute(
@@ -358,22 +392,23 @@ def _toi(cur: psycopg.Cursor, snaps: list[dict]) -> dict[str, Any]:
             }
 
     cur.execute(
-        """
-        SELECT tfopwg_disposition AS d, count(*) AS n FROM raw_exofop_toi
-        WHERE ingest_run_id = %(run)s GROUP BY 1 ORDER BY 2 DESC, 1
+        f"""
+        SELECT d, count(*) AS n FROM ({_TOI_RUN.format(run="run")}) t
+        GROUP BY 1 ORDER BY 2 DESC, 1
         """,
         {"run": newest["run"]},
     )
     out["toi_mix"] = [{"disposition": r["d"], "count": r["n"]} for r in cur.fetchall()]
+    if not out["toi_mix"]:
+        raise SnapshotsUnavailable("the newest TOI snapshot has no TOIs")
 
     as_of = dt.date.fromisoformat(newest["date"])
     first_month = month_window(as_of)[0]
     cur.execute(
-        """
+        f"""
         SELECT left(extra->>'Date TOI Alerted (UTC)', 7) AS month, count(*) AS n
-        FROM raw_exofop_toi
-        WHERE ingest_run_id = %(run)s
-          AND extra->>'Date TOI Alerted (UTC)' >= %(start)s
+        FROM ({_TOI_RUN.format(run="run")}) t
+        WHERE extra->>'Date TOI Alerted (UTC)' >= %(start)s
         GROUP BY 1
         """,
         {"run": newest["run"], "start": first_month},
@@ -384,16 +419,33 @@ def _toi(cur: psycopg.Cursor, snaps: list[dict]) -> dict[str, Any]:
     return out
 
 
+def empty_stories() -> dict[str, Any]:
+    """The payload with no snapshot at all: every block present and empty, which the SPA hides.
+    Served only on a cold start whose compute raised ``SnapshotsUnavailable``."""
+    # both helpers return their empty blocks before they touch the cursor
+    return {"as_of": None, "confirmed": _confirmed(None, []), **_toi(None, [])}
+
+
 def catalog_stories(db: psycopg.Connection) -> dict[str, Any]:
     """Everything the landing's story panels need, in one payload (see docs/specs/
-    landing-stories.md for the shape)."""
+    landing-stories.md for the shape). Raises ``SnapshotsUnavailable`` when either source has no
+    retained snapshot or its newest one reads as empty.
+
+    ``db`` must not have run a query in its current transaction: the first statement makes the
+    transaction REPEATABLE READ, so that every query sees the same snapshots even while the
+    nightly prune deletes an old run."""
     with db.cursor() as cur:
+        cur.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
         snaps = _snapshots(cur)
+        if not snaps["pscomppars"] or not snaps["toi"]:
+            raise SnapshotsUnavailable(
+                "no retained snapshot of "
+                + " or ".join(k for k in ("pscomppars", "toi") if not snaps[k])
+            )
         confirmed = _confirmed(cur, snaps["pscomppars"])
         toi = _toi(cur, snaps["toi"])
-    newest_dates = [s[-1]["date"] for s in snaps.values() if s]
     return {
-        "as_of": max(newest_dates) if newest_dates else None,
+        "as_of": max(s[-1]["date"] for s in snaps.values()),
         "confirmed": confirmed,
         **toi,
     }

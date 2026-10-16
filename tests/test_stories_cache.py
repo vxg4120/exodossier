@@ -109,6 +109,96 @@ def test_a_failed_stories_refresh_keeps_the_previous_payload(monkeypatch):
     assert stories.stories_cache.value == {"as_of": "2026-10-14"}
 
 
+class _Raises:
+    def __init__(self):
+        self.calls = 0
+
+    def __call__(self, db, *args):
+        self.calls += 1
+        raise st.SnapshotsUnavailable("the newest TOI snapshot has no TOIs")
+
+
+def test_a_refresh_that_finds_empty_snapshots_keeps_the_previous_payload(monkeypatch):
+    """A TRUNCATE committed mid-refresh makes the raw tables read as empty: the compute raises,
+    and the cache keeps the payload it has instead of replacing it with zeros."""
+    monkeypatch.setattr(stories, "catalog_stories", _Counter({"as_of": "2026-10-14"}))
+    stories.get_stories(DB)
+
+    empty = _Raises()
+    monkeypatch.setattr(stories, "catalog_stories", empty)
+    monkeypatch.setattr(stories, "get_db", _fake_db(object()))
+    monkeypatch.setattr(stories.stories_cache, "ttl_s", 0.0)
+    assert stories.get_stories(DB)["as_of"] == "2026-10-14"
+    _wait_for_refresh(stories.stories_cache)
+    assert empty.calls == 1
+    assert stories.stories_cache.value == {"as_of": "2026-10-14"}
+
+
+def test_a_cold_start_with_empty_snapshots_serves_the_empty_payload_uncached(monkeypatch):
+    empty = _Raises()
+    monkeypatch.setattr(stories, "catalog_stories", empty)
+    out = stories.get_stories(DB)
+    assert out == st.empty_stories()
+    assert out["as_of"] is None and out["confirmed"]["series"] == []
+    assert out["toi_verdicts"]["transitions"] == [] and out["toi_mix"] == []
+    assert stories.stories_cache.value is None  # not cached: the next request computes again
+    stories.get_stories(DB)
+    assert empty.calls == 2
+
+
+class _FakeCursor:
+    """Answers each fetchall with the next queued result; records every statement."""
+
+    def __init__(self, results):
+        self.results, self.sql = list(results), []
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def execute(self, sql, params=None):
+        self.sql.append(sql)
+
+    def fetchall(self):
+        return self.results.pop(0)
+
+
+class _FakeConn:
+    def __init__(self, cur):
+        self.cur = cur
+
+    def cursor(self):
+        return self.cur
+
+
+TOI_SNAPS = [{"run": 7, "date": "2026-07-15"}, {"run": 2018, "date": "2026-10-15"}]
+
+
+@pytest.mark.parametrize("missing", ["pscomppars", "toi"])
+def test_catalog_stories_raises_when_a_source_has_no_snapshot(monkeypatch, missing):
+    snaps = {"pscomppars": SNAPS, "toi": TOI_SNAPS, missing: []}
+    monkeypatch.setattr(st, "_snapshots", lambda cur: snaps)
+    cur = _FakeCursor([])
+    with pytest.raises(st.SnapshotsUnavailable, match=missing):
+        st.catalog_stories(_FakeConn(cur))
+    assert "REPEATABLE READ" in cur.sql[0]
+
+
+def test_an_empty_pscomppars_snapshot_raises():
+    # run 2017 reads as empty (a TRUNCATE committed after the snapshot list was read)
+    cur = _FakeCursor([[{"ingest_run_id": r["run"], "n": 6000} for r in SNAPS[:-1]]])
+    with pytest.raises(st.SnapshotsUnavailable, match="pscomppars"):
+        st._confirmed(cur, SNAPS)
+
+
+def test_an_empty_newest_toi_snapshot_raises():
+    cur = _FakeCursor([[]])  # the disposition mix of the newest run: no rows
+    with pytest.raises(st.SnapshotsUnavailable, match="TOI"):
+        st._toi(cur, TOI_SNAPS[-1:])
+
+
 @pytest.mark.filterwarnings(r"ignore:Using `httpx`")
 def test_the_lifespan_warms_the_stories_cache(monkeypatch):
     from fastapi.testclient import TestClient
@@ -185,6 +275,16 @@ def test_on_the_first_of_the_month_this_month_falls_back_to_the_snapshot_before(
 
 def test_one_snapshot_has_no_month_baseline():
     assert st.month_baseline(SNAPS[:1]) is None
+
+
+def test_two_pulls_on_one_date_leave_one_point_the_newest():
+    snaps = [
+        {"run": 6, "date": "2026-07-15"},
+        {"run": 2016, "date": "2026-10-15"},
+        {"run": 2017, "date": "2026-10-15"},
+    ]
+    assert st.one_per_date(snaps) == [snaps[0], snaps[2]]
+    assert st.one_per_date(SNAPS) == SNAPS
 
 
 RUNS = [6, 1111, 1849, 2017]

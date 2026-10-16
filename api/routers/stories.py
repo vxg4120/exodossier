@@ -3,6 +3,10 @@
 Every block is a diff between retained raw snapshots (``api.stories``), and those snapshots only
 move when the nightly pulls land, so the response is memoised like ``/api/stats``: warmed at
 start-up, served from memory, refreshed in the background once stale.
+
+When the snapshots read as empty (``SnapshotsUnavailable``), a refresh fails and the cache keeps
+the payload it has. Only a cold start, with nothing cached yet, answers with the empty payload,
+which the SPA hides panel by panel; it is not cached, so the next request computes again.
 """
 
 from contextlib import contextmanager
@@ -13,7 +17,7 @@ from fastapi import APIRouter, Depends
 
 from api.cache import RefreshingCache
 from api.deps import get_db
-from api.stories import catalog_stories
+from api.stories import SnapshotsUnavailable, catalog_stories, empty_stories
 
 router = APIRouter(tags=["stories"])
 
@@ -32,4 +36,8 @@ stories_cache: RefreshingCache[dict[str, Any]] = RefreshingCache(
 
 @router.get("/stories")
 def get_stories(db: Annotated[psycopg.Connection, Depends(get_db)]):
-    return stories_cache.get(lambda: catalog_stories(db))
+    try:
+        return stories_cache.get(lambda: catalog_stories(db))
+    except SnapshotsUnavailable:
+        # Reached only when nothing is cached: a cached payload is returned without computing.
+        return empty_stories()
