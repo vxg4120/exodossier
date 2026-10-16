@@ -102,9 +102,19 @@ function mockConflicts(type: ConflictType, limit: number, offset: number): Confl
 }
 
 /* ---- public API ----------------------------------------------------------- */
+// The topbar telemetry and the Overview both ask for the stats on the same first render; the
+// second caller joins the first caller's in-flight request instead of opening a second one. The
+// promise is dropped once it settles, so a later mount or a reload still fetches fresh numbers.
+let statsInFlight: Promise<Stats> | null = null;
+
 export function getStats(): Promise<Stats> {
-  if (MOCK) return delay(statsFixture as Stats);
-  return realGet<Stats>("/stats");
+  if (!statsInFlight) {
+    const request = MOCK ? delay(statsFixture as Stats) : realGet<Stats>("/stats");
+    statsInFlight = request.finally(() => {
+      statsInFlight = null;
+    });
+  }
+  return statsInFlight;
 }
 
 export function searchTargets(q: string): Promise<SearchResponse> {
