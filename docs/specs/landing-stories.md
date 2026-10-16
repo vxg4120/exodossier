@@ -160,3 +160,10 @@ giant >= 6, unknown radius.
   (nine queries); through the SSH tunnel the wall time is 4 to 6 s and spikes past 15 s when the
   tunnel itself is slow (6.9 s to connect, 3.1 s for `select 1` in one run). The first run after a
   cold buffer cache took 9 s. Warmed in the lifespan, so visitors never pay it.
+- 2026-10-16 (Claude) Constraint revised after space-7e merged the Fraunces heading layer to exo
+  main (f3cbe6f): the branch was rebased onto it, and new headline sentences and hero numerals use
+  `var(--font-display)`; data, labels and tables stay mono. Still no token changes.
+- 2026-10-16 (Claude) pscomppars fills `pl_rade` from a mass-radius relation for planets that
+  were not seen to transit, so the size bins mix measured and estimated radii; the panel says so.
+  Most of the 55 new "giants" since Jul 15 are TESS transits (35), but microlensing and RV planets
+  (KMTNet, MOA, OGLE, Keck, Gaia) carry estimated radii.
