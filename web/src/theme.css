@@ -595,6 +595,14 @@ button {
 .table-wrap {
   overflow-x: auto;
   width: 100%;
+  /* scroll-edge cues, CSS only: the two "local" covers ride with the content
+     and hide the two "scroll" shades once an edge is reached, so a shade shows
+     only on a side that has more table behind it. Tables sit on --surface. */
+  background:
+    linear-gradient(90deg, var(--surface) 40%, transparent) left / 28px 100% no-repeat local,
+    linear-gradient(270deg, var(--surface) 40%, transparent) right / 28px 100% no-repeat local,
+    linear-gradient(90deg, color-mix(in srgb, var(--ink-ghost) 55%, transparent), transparent) left / 16px 100% no-repeat scroll,
+    linear-gradient(270deg, color-mix(in srgb, var(--ink-ghost) 55%, transparent), transparent) right / 16px 100% no-repeat scroll;
 }
 .dtable {
   width: 100%;
@@ -1372,6 +1380,18 @@ button {
   }
   .topbar__help {
     margin: 0 8px;
+  }
+  /* claims: break between words, never inside one. word-break: break-word
+     let the table shrink the column to a few characters ("Fals / posi");
+     overflow-wrap only breaks a word that cannot fit on a line by itself, so
+     the table keeps its width and scrolls behind the edge cue instead. */
+  .claim__head {
+    flex-wrap: wrap;
+  }
+  .claim__val {
+    white-space: normal;
+    word-break: normal;
+    overflow-wrap: break-word;
   }
   /* nav row: tighter links so more of the five fit before the fade */
   .navlink {
