@@ -2,6 +2,8 @@ import { Component, StrictMode, type ErrorInfo, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import App from "./App";
+// Fraunces (OFL) is vendored via @fontsource and bundled, as on orbital: no CDN font request
+import "@fontsource-variable/fraunces/full.css";
 import "./theme.css";
 
 /** Screen-level error boundary: a single React fault used to unmount the whole SPA and leave a

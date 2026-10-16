@@ -76,6 +76,12 @@ dumps.** `data/` is gitignored. Each source keeps its own terms:
 - **ExoFOP-TESS** (the TESS Follow-up Observing Program working group archive) — TOI and CTOI lists.
   Attribution required; cite ExoFOP-TESS and the relevant TFOPWG. <https://exofop.ipac.caltech.edu/tess/>
 
+## Design notes
+
+- 2026-10-16 — Type: Fraunces display layer over mono body, shared with orbital (decided 2026-10-16).
+  Fraunces (SIL OFL 1.1) is vendored via `@fontsource-variable/fraunces` and bundled; it sets page
+  titles, panel titles and hero stat figures only, while data, labels and tables stay mono.
+
 ## License
 
 Copyright (c) 2026 Vibhav Gupta. Licensed under the **MIT License** — see [`LICENSE`](LICENSE).
