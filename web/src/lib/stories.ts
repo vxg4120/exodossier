@@ -124,8 +124,8 @@ export function shortFacility(name: string): string {
 }
 
 /* ---- the dispatch ------------------------------------------------------------------------ */
-/** Two or three plain sentences: what the confirmed list did, what TESS follow-up did, and the
-    size of the queue. Each clause appears only when its numbers exist. */
+/** Two plain sentences: how the confirmed list moved, and what TESS follow-up decided. Each
+    clause appears only when its numbers exist; the queue size lives in the stat tiles. */
 export function dispatch(s: Stories): string[] {
   const c = s.confirmed;
   const out: string[] = [];
@@ -133,20 +133,12 @@ export function dispatch(s: Stories): string[] {
     const first = c.series[0];
     const last = c.series[c.series.length - 1];
     const net = last.count - first.count;
-    const grew = net >= 0 ? "grew" : "shrank";
     let lead =
-      `NASA's list of confirmed exoplanets ${grew} from ${fmtInt(first.count)} to ` +
-      `${fmtInt(last.count)} between ${fmtDay(first.date)} and ${fmtDay(last.date)}`;
-    if (c.added_since_baseline > 0) {
-      lead += `: ${plural(c.added_since_baseline, "planet was", "planets were")} added`;
-      if (c.month_baseline_date && c.added_since_month > 0) {
-        lead += `, ${fmtInt(c.added_since_month)} of them since ${fmtDay(c.month_baseline_date)}`;
-      }
-      if (c.removed_since_baseline > 0) {
-        lead += `, and ${plural(c.removed_since_baseline, "was", "were")} removed`;
-      }
-    } else if (c.removed_since_baseline > 0) {
-      lead += `: ${plural(c.removed_since_baseline, "planet was", "planets were")} removed`;
+      net >= 0
+        ? `NASA's list of confirmed exoplanets has grown by ${plural(net, "planet", "planets")} since ${fmtDay(first.date)}, to ${fmtInt(last.count)}`
+        : `NASA's list of confirmed exoplanets has shrunk by ${plural(-net, "planet", "planets")} since ${fmtDay(first.date)}, to ${fmtInt(last.count)}`;
+    if (c.month_baseline_date && c.added_since_month > 0) {
+      lead += `, and ${plural(c.added_since_month, "new planet", "new planets")} arrived after ${fmtDay(c.month_baseline_date)}`;
     }
     out.push(lead + ".");
   }
@@ -157,20 +149,12 @@ export function dispatch(s: Stories): string[] {
     const demoted = v.demoted.length;
     const allFp = v.demoted.every((d) => d.to === "FP");
     let line =
-      `On the TESS list since ${fmtDay(v.from_date)}, the follow-up working group confirmed ` +
-      `${plural(conf, "candidate", "candidates")} and ruled out ${fmtInt(out_)}`;
+      `In the same span, TESS follow-up confirmed ${plural(conf, "candidate", "candidates")} ` +
+      `and ruled out ${fmtInt(out_)}`;
     if (demoted > 0) {
-      line += `, and ${plural(demoted, "planet", "planets")} it had marked confirmed ${
-        demoted === 1 ? "was" : "were"
-      } reclassified as ${allFp ? (demoted === 1 ? "a false positive" : "false positives") : "false positives or false alarms"}`;
+      line += `, and ${plural(demoted, "planet", "planets")} that had been marked confirmed turned out to be ${allFp ? (demoted === 1 ? "a false positive" : "false positives") : "false positives or false alarms"}`;
     }
     out.push(line + ".");
-  }
-  const waiting = awaitingVerdict(s);
-  if (waiting > 0) {
-    out.push(
-      `${plural(waiting, "TESS candidate is", "TESS candidates are")} still waiting for a verdict.`,
-    );
   }
   return out;
 }

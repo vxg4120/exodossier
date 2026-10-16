@@ -37,6 +37,11 @@ const TRANSITIONS_SHOWN = 7;
 /** Facilities named before the rest fold into one row. */
 const FACILITIES_SHOWN = 5;
 
+/** "+132" or "-3", with the thousands separator. */
+function netSign(n: number): string {
+  return `${n >= 0 ? "+" : "-"}${fmtInt(Math.abs(n))}`;
+}
+
 export function Overview() {
   const stories = useApi(() => getStories(), []);
   const stats = useApi(() => getStats(), []);
@@ -174,8 +179,8 @@ function StoryPanels({ s }: { s: Stories }) {
           sub={
             hasConfirmedChange && base ? (
               <>
-                on NASA&rsquo;s list, <span className="num">+{fmtInt(c.added_since_baseline)}</span>{" "}
-                added since {fmtDayShort(base)}
+                on NASA&rsquo;s list, <span className="num">{netSign(last.count - (c.series[0]?.count ?? last.count))}</span>{" "}
+                net since {fmtDayShort(base)}
               </>
             ) : (
               "on NASA's confirmed-planet list"
@@ -351,8 +356,9 @@ function SizesPanel({ s }: { s: Stories }) {
       how={
         <>
           Planets on the {fmtDay(c.series[c.series.length - 1].date)} list that were not on the{" "}
-          {fmtDay(c.baseline_date)} list, binned by radius in Earth radii. Records skip planets
-          with no measured radius or period.
+          {fmtDay(c.baseline_date)} list, binned by the archive&rsquo;s radius in Earth radii. For a planet that has not been
+          seen to transit, the archive estimates radius from mass, so some of the giants are
+          estimates. Records skip planets with no radius or period.
         </>
       }
     >
