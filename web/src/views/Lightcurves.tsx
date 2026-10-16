@@ -111,7 +111,8 @@ export function Lightcurves() {
       </header>
 
       <Async state={summary} loadingLabel="Loading pipeline summary" loadingRows={3}>
-        {(s) => <SummaryStrip s={s} />}
+        {/* With nothing graded the tiles would be four dashes; the empty state below says it. */}
+        {(s) => (s.state === "empty" ? null : <SummaryStrip s={s} />)}
       </Async>
 
       <Panel title="Per-target results" flush>
