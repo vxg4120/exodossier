@@ -16,6 +16,7 @@ import type {
   SearchResponse,
   SearchResult,
   Stats,
+  Stories,
   TargetDetail,
 } from "./types";
 
@@ -26,6 +27,7 @@ import conflictsDisposition from "./fixtures/conflicts_disposition.json";
 import conflictsRadius from "./fixtures/conflicts_radius.json";
 import conflictsTeff from "./fixtures/conflicts_teff.json";
 import attributionFixture from "./fixtures/attribution.json";
+import storiesFixture from "./fixtures/stories.json";
 
 export const MOCK = import.meta.env.VITE_API_MOCK === "1";
 
@@ -192,4 +194,9 @@ export function getLightcurveResults(
   const params: Record<string, string | number> = { limit, offset };
   if (cohort) params.cohort = cohort;
   return realGet<LightcurveResults>("/lightcurves/results", params);
+}
+
+export function getStories(): Promise<Stories> {
+  if (MOCK) return delay(storiesFixture as Stories);
+  return realGet<Stories>("/stories");
 }
