@@ -1399,6 +1399,15 @@ button {
     word-break: normal;
     overflow-wrap: break-word;
   }
+  /* panel head: meta drops to its own line instead of squeezing the title */
+  .panel__head {
+    flex-wrap: wrap;
+    align-items: flex-start;
+    row-gap: 4px;
+  }
+  .panel__meta {
+    flex-basis: 100%;
+  }
   /* nav row: tighter links so more of the five fit before the fade */
   .navlink {
     grid-template-columns: auto 1fr;
