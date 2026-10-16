@@ -53,6 +53,11 @@ AI-orchestrated cited dossiers graded against TFOPWG dispositions (gold program)
 dossier site and MCP server (`resolve_target`, `candidate_dossier`, `conflicts_for_target`,
 `rerank_targets`). See [`docs/SPEC.md`](docs/SPEC.md) for the full roadmap.
 
+The pipeline's recovery results are on the site at `/lightcurves`, read from
+`GET /api/lightcurves/summary`, `GET /api/lightcurves/results?limit&offset&sort&cohort` and
+`GET /api/lightcurves/target/{candidate_id}` (spec:
+[`docs/specs/lightcurves-wave2.md`](docs/specs/lightcurves-wave2.md)).
+
 ## Quickstart
 
 ```bash
