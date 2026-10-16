@@ -15,9 +15,13 @@ nothing here confirms or rejects a planet.
 The slice is small (tens of targets, a few detections each), so both endpoints read the latest
 run per target and grade it in Python on every request; no cache is needed.
 
-The tables can be empty: the nightly graph rebuild truncates ``candidate`` with CASCADE, which
-empties ``target`` and, through it, ``pipeline_run``, ``detection`` and ``fp_scenario``. The
-endpoints then answer with zero counts and ``state: "empty"`` rather than an error.
+Rows are keyed by TOI and TIC, which the nightly graph rebuild does not change (migration 0007
+removed the foreign key that let the rebuild's TRUNCATE ... CASCADE empty these tables). The
+rebuild does renumber candidates, so each row's candidate is resolved at read time from its TOI
+through ``entity_identifier``; ``target.candidate_id`` is a stale-able hint and is never used for
+links. A TOI that no longer resolves is returned with ``candidate_id: null`` and no link.
+
+With no targets at all the endpoints answer with zero counts and ``state: "empty"``.
 """
 
 from __future__ import annotations
@@ -170,12 +174,22 @@ def _load(db: psycopg.Connection, cohort: str | None = None) -> list[dict[str, A
             SELECT t.target_id, t.candidate_id, t.tic_id, t.toi, t.cohort, t.stratum,
                    t.tfopwg_disp, t.canonical_disp, t.known_period_days, t.known_epoch_bjd,
                    t.known_depth_ppm, t.known_duration_hr, t.tmag,
-                   c.canonical_name AS name, s.canonical_name AS host,
+                   cur_c.candidate_id AS resolved_candidate_id, cur_c.name, cur_c.host,
                    r.pipeline_run_id, r.status, r.n_sectors, r.baseline_days, r.runtime_s,
                    r.data_vintage, r.git_sha, r.notes, r.finished_at
             FROM target t
-            JOIN candidate c ON c.candidate_id = t.candidate_id
-            JOIN star s ON s.star_id = c.star_id
+            -- The current candidate for this TOI, through the identifier crosswalk. Never the
+            -- stored candidate_id: the graph rebuild renumbers candidates (migration 0007).
+            -- A TOI held by more than one candidate prefers the one on the target's TIC.
+            LEFT JOIN LATERAL (
+                SELECT c.candidate_id, c.canonical_name AS name, s.canonical_name AS host
+                FROM entity_identifier ei
+                JOIN candidate c ON c.candidate_id = ei.candidate_id
+                JOIN star s ON s.star_id = c.star_id
+                WHERE ei.id_type = 'toi' AND ei.id_value = t.toi
+                ORDER BY (s.tic_id IS NOT DISTINCT FROM t.tic_id) DESC, c.candidate_id
+                LIMIT 1
+            ) cur_c ON true
             LEFT JOIN LATERAL (
                 SELECT * FROM pipeline_run pr WHERE pr.target_id = t.target_id
                 ORDER BY pr.pipeline_run_id DESC LIMIT 1
@@ -207,8 +221,9 @@ def _load(db: psycopg.Connection, cohort: str | None = None) -> list[dict[str, A
         rows.append(
             {
                 "target_id": t["target_id"],
-                "candidate_id": t["candidate_id"],
-                "name": t["name"],
+                # None when the TOI no longer resolves in the current graph: render, don't link.
+                "candidate_id": t["resolved_candidate_id"],
+                "name": t["name"] or f"TOI-{t['toi']}",
                 "host": t["host"],
                 "tic_id": str(t["tic_id"]),
                 "toi": t["toi"],

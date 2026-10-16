@@ -93,7 +93,10 @@ export function Lightcurves() {
     () => getLightcurveResults(LIMIT, offset, cohort),
     [cohort, offset],
   );
-  const open = (r: LightcurveRow) => navigate(`/target/${r.candidate_id}`);
+  // A TOI the current graph no longer resolves has no target page to open.
+  const open = (r: LightcurveRow) => {
+    if (r.candidate_id !== null) navigate(`/target/${r.candidate_id}`);
+  };
 
   return (
     <div className="view fadein">

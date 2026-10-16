@@ -193,9 +193,10 @@ export interface LightcurveSummary {
 
 export interface LightcurveRow {
   target_id: number;
-  candidate_id: number;
+  /** The candidate this TOI resolves to in the current graph; null when it no longer resolves. */
+  candidate_id: number | null;
   name: string;
-  host: string;
+  host: string | null;
   tic_id: string;
   toi: string | null;
   cohort: LightcurveCohort;
