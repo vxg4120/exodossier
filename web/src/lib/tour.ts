@@ -20,9 +20,9 @@ const STEPS: DriveStep[] = [
   {
     element: '[data-tour="stats"]',
     popover: {
-      title: "The catalog at a glance",
+      title: "What changed lately",
       description:
-        "Candidates, host stars, and how many source assertions back them — plus the count of disposition conflicts, where the archives can't agree on what a planet even is.",
+        "How many planets NASA lists as confirmed, how many TESS candidates still wait for a verdict, and how many the follow-up working group confirmed or ruled out since the first snapshot. The stories below show the details.",
       side: "bottom",
       align: "start",
     },

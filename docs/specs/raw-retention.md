@@ -4,7 +4,7 @@
 acceptance criterion met as of 2026-10-12
 **Owner:** Vib
 **Repos touched:** exodossier (the script), space (the nightly step and runbook)
-**Last updated:** 2026-10-09
+**Last updated:** 2026-10-16
 
 ## Goal
 Every exo ingest pull lands a full copy of its source in the six `raw_*` tables, and nothing ever
@@ -22,7 +22,9 @@ that no nightly reader reads. This applies the policy that has bounded the satel
   a shared package. Because: the two repos already port `common/db.py` and `ingest/runlog.py`
   this way, and the copy has been in production for nine days.
 - 2026-10-09: **`KEEP_LATEST` may go as low as 1.** Exo has no reader that compares two runs
-  (space keeps at least 2 for `identity/churn.py`). It stays at 3 for slack.
+  (space keeps at least 2 for `identity/churn.py`). It stays at 3 for slack. *Superseded on
+  2026-10-16: `/api/stories` compares runs, so `KEEP_LATEST` must stay at 2 or more (see the
+  decision log).*
 - 2026-10-09: **Do not change `pipeline/select_targets.py`.** Per candidate, it reads the
   `raw_exofop_toi` row with the lowest `raw_id`, across every run and whatever the run's status,
   and it looked like a bug. The cohort it selects is meant to be a fixed, reproducible slice,
@@ -43,6 +45,8 @@ that no nightly reader reads. This applies the policy that has bounded the satel
 - Never run `--compact` inside the 07:10 or 19:10 UTC nightly windows. One-offs on the box run
   under `nohup` with a log file, never tied to a live SSH session.
 - Never drop a run that has not finished ('ok' or 'error'), whatever its id.
+- Keep the first OK run of each UTC month, and keep `KEEP_LATEST` at 2 or more. `/api/stories`
+  reads both (see Interfaces).
 - A new `raw_*` table must be added to `SNAPSHOT_TABLES`. The test suite fails until it is.
 - This touches only the `exo` database's `raw_*` tables. Never the `oei` database, and never
   `ingest_run` (the ledger, 320 kB, which `fresh_within` reads).
@@ -51,8 +55,13 @@ that no nightly reader reads. This applies the policy that has bounded the satel
 - `scripts/prune_snapshots.py`: a dry run by default. `--apply` runs the nightly DELETE and
   VACUUM. `--compact` runs the one-time rewrite. It prints a final `prune_snapshots:` line.
 - Readers of the raw tables: `identity/build.py` and `identity/assertions.py` take
-  `max(ingest_run_id)` among OK runs, and `ingest/loaders.py` only writes. The API, the web app
-  and `mcp/` read none of them. No view and no foreign key depends on a raw table.
+  `max(ingest_run_id)` among OK runs, and `ingest/loaders.py` only writes. Since 2026-10-16 the
+  API reads two of them: `GET /api/stories` (`api/stories.py`) compares `raw_pscomppars` and
+  `raw_exofop_toi` across every retained OK run. Its baseline is the oldest kept run (the
+  July 15 first pull), each month's first OK run is a point on its confirmed-list series and the
+  start of its "this month" window, and the newest run is compared with the one before it on the
+  morning of the 1st. So it depends on the monthly keepers and on at least two recent runs. The
+  web app and `mcp/` read none of them. No view and no foreign key depends on a raw table.
 - space `deploy/nightly-refresh.sh`: `exo_prune_snapshots` runs
   `python scripts/prune_snapshots.py --apply` in the `exo-api` container, as the last exo
   step, after every reader of tonight's runs. `scripts/` is baked into the image, so the image
@@ -76,8 +85,11 @@ that no nightly reader reads. This applies the policy that has bounded the satel
   so the policy never sees them.
 - **The monthly sample grows**, by about 105 MB a month in all, which is 1.2 GB a year. It's the
   same trade-off as space, and it's open below.
-- **TRUNCATE is not MVCC-safe**, but no API path reads a raw table, so only the nightly could
-  notice, and the compaction runs outside it.
+- **TRUNCATE is not MVCC-safe.** When this was written no API path read a raw table; since
+  2026-10-16 `/api/stories` does. A `--compact` that commits while a stories refresh is running
+  makes the tables read as empty to that refresh, so the refresh raises and the API keeps serving
+  its previous payload (the nightly DELETE is MVCC-safe, and the refresh reads in one
+  REPEATABLE READ snapshot). A compaction still runs outside the nightly windows.
 
 ## Rollout (one time, in this order)
 1. Outside the nightly windows, dump the six tables on the box under `nohup`
@@ -140,3 +152,12 @@ that no nightly reader reads. This applies the policy that has bounded the satel
   code alone could not show, so it was replaced with the production measurement under Edge
   cases. (2) The space runbook sent exo operators to foreground commands without the backup,
   so it now points at the Rollout above.
+- 2026-10-16 (Claude): the landing-stories branch made `/api/stories` the first API reader of
+  the raw tables (docs/specs/landing-stories.md). It diffs `raw_pscomppars` and `raw_exofop_toi`
+  across runs, so two things this spec allowed are now constraints: the first OK run of each UTC
+  month must stay (the series points and the "this month" baseline), and `KEEP_LATEST` must stay
+  at 2 or more, because on the morning of the 1st the "this month" window compares the newest
+  run with the one before it, which only the newest-N rule keeps. The 2026-10-09 decision that it
+  may go to 1 is superseded. `tests/test_prune_snapshots.py` pins both without a database.
+  Lesson: a spec's "no reader does X" is a constraint on future readers too, so a new reader
+  must update the spec that made the claim.

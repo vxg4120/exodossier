@@ -228,3 +228,71 @@ export interface LightcurveResults {
   sort: string;
   cohort: LightcurveCohort | null;
 }
+
+/* ---- /api/stories: what changed across the retained raw snapshots ------------------------- */
+/** A TFOPWG code (PC, APC, CP, KP, FP, FA), null for a TOI with no disposition yet, or one of
+    the two sentinels for a TOI that was not on the list at one end of the comparison. */
+export type TfopwgCode = string | null;
+
+export interface ConfirmedPoint {
+  date: string;
+  count: number;
+  /** vs the snapshot before; null on the first */
+  added: number | null;
+  removed: number | null;
+}
+
+export interface NewPlanet {
+  pl_name: string;
+  host: string | null;
+  facility: string | null;
+  radius_re: number | null;
+  period_days: number | null;
+  first_seen: string;
+}
+
+export interface PlanetRecord {
+  pl_name: string;
+  host: string | null;
+  facility: string | null;
+  value: number;
+}
+
+export interface VerdictTransition {
+  from: TfopwgCode;
+  to: TfopwgCode;
+  count: number;
+}
+
+export interface VerdictWindow {
+  from_date: string | null;
+  to_date: string | null;
+  transitions: VerdictTransition[];
+}
+
+export interface Stories {
+  as_of: string | null;
+  confirmed: {
+    series: ConfirmedPoint[];
+    baseline_date: string | null;
+    added_since_baseline: number;
+    removed_since_baseline: number;
+    removed: { pl_name: string; last_seen: string }[];
+    month_baseline_date: string | null;
+    added_since_month: number;
+    newest: NewPlanet[];
+    sizes: { bin: string; count: number }[];
+    facilities: { facility: string; count: number }[];
+    records: {
+      smallest: PlanetRecord | null;
+      shortest_period: PlanetRecord | null;
+      longest_period: PlanetRecord | null;
+    };
+  };
+  toi_verdicts: VerdictWindow & {
+    demoted: { toi: string; tic_id: number | null; from: string; to: string }[];
+  };
+  toi_verdicts_month: VerdictWindow;
+  toi_mix: { disposition: TfopwgCode; count: number }[];
+  toi_alerts_monthly: { month: string; count: number; partial: boolean }[];
+}
