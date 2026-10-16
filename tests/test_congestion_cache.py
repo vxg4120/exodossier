@@ -10,6 +10,7 @@ import time
 
 import pytest
 
+from api import cache
 from api.routers import twoskies
 
 BINS_A = [
@@ -68,15 +69,14 @@ def _scans(*conns):
 
 def _wait_for_refresh(timeout_s=5.0):
     deadline = time.monotonic() + timeout_s
-    while twoskies._heavy_refreshing and time.monotonic() < deadline:
+    while twoskies._heavy.refreshing and time.monotonic() < deadline:
         time.sleep(0.01)
-    assert not twoskies._heavy_refreshing, "background refresh never finished"
+    assert not twoskies._heavy.refreshing, "background refresh never finished"
 
 
 @pytest.fixture(autouse=True)
-def _cold_cache(monkeypatch):
-    monkeypatch.setattr(twoskies, "_heavy_cached", None)
-    monkeypatch.setattr(twoskies, "_heavy_refreshing", False)
+def _cold_cache():
+    twoskies._heavy.reset()
     yield
     _wait_for_refresh()
 
@@ -104,7 +104,7 @@ def test_a_stale_entry_is_served_while_one_background_refresh_runs(monkeypatch):
         yield refresh_conn
 
     monkeypatch.setattr(twoskies, "get_oei_db", fake_oei_db)
-    monkeypatch.setattr(twoskies, "CONGESTION_TTL_S", 0.0)
+    monkeypatch.setattr(twoskies._heavy, "ttl_s", 0.0)
     served = []
     started = time.monotonic()
     for _ in range(3):
@@ -114,7 +114,7 @@ def test_a_stale_entry_is_served_while_one_background_refresh_runs(monkeypatch):
     assert elapsed < 0.15  # nobody waited on the 0.2 s refresh
     _wait_for_refresh()
     assert _scans(refresh_conn) == 1  # three stale hits, one refresh
-    monkeypatch.setattr(twoskies, "CONGESTION_TTL_S", 3600.0)
+    monkeypatch.setattr(twoskies._heavy, "ttl_s", 3600.0)
     assert twoskies.congestion_astronomy(_FakeConn())["leo_objects"] == 11
 
 
@@ -126,11 +126,11 @@ def test_a_failed_refresh_keeps_the_previous_numbers_in_service(monkeypatch):
         yield  # pragma: no cover
 
     monkeypatch.setattr(twoskies, "get_oei_db", broken_oei_db)
-    monkeypatch.setattr(twoskies, "CONGESTION_TTL_S", 0.0)
+    monkeypatch.setattr(twoskies._heavy, "ttl_s", 0.0)
     assert twoskies.congestion_astronomy(_FakeConn())["leo_objects"] == 10
     _wait_for_refresh()
-    assert twoskies._heavy_cached is not None
-    assert twoskies._heavy_cached[1]["leo_objects"] == 10
+    assert twoskies._heavy.value is not None
+    assert twoskies._heavy.value["leo_objects"] == 10
 
 
 def test_concurrent_cold_requests_run_the_scan_once():
@@ -160,18 +160,18 @@ def test_a_refresh_thread_that_fails_to_start_does_not_disable_refreshes(monkeyp
         def start(self):
             raise RuntimeError("can't start new thread")
 
-    real_threading = twoskies.threading
-    monkeypatch.setattr(twoskies, "CONGESTION_TTL_S", 0.0)
-    monkeypatch.setattr(twoskies, "threading", types.SimpleNamespace(Thread=_Unstartable))
+    real_threading = cache.threading
+    monkeypatch.setattr(twoskies._heavy, "ttl_s", 0.0)
+    monkeypatch.setattr(cache, "threading", types.SimpleNamespace(Thread=_Unstartable))
     assert twoskies.congestion_astronomy(_FakeConn())["leo_objects"] == 10  # stale, no error
-    assert twoskies._heavy_refreshing is False
+    assert twoskies._heavy.refreshing is False
 
     refresh_conn = _FakeConn(bins=BINS_B)
 
     def fake_oei_db():
         yield refresh_conn
 
-    monkeypatch.setattr(twoskies, "threading", real_threading)
+    monkeypatch.setattr(cache, "threading", real_threading)
     monkeypatch.setattr(twoskies, "get_oei_db", fake_oei_db)
     twoskies.congestion_astronomy(_FakeConn())  # a later request retries the refresh
     _wait_for_refresh()
