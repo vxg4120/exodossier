@@ -42,6 +42,7 @@ import psycopg
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sgp4.api import WGS72, Satrec, SatrecArray
 
+from api.cache import RefreshingCache
 from api.deps import get_db, get_oei_db
 
 router = APIRouter(prefix="/twoskies", tags=["twoskies"])
@@ -255,10 +256,14 @@ LIMIT 8
 # recomputes it on its own connection, so no visitor waits on the scan except the very first
 # request after the process starts, and concurrent first requests wait for that one computation.
 CONGESTION_TTL_S = 1800.0
-_heavy_cached: tuple[float, dict] | None = None  # (monotonic time computed, cached half)
-_heavy_refreshing = False
-_heavy_state = threading.Lock()  # guards the two globals above; never held across a query
-_heavy_cold = threading.Lock()  # single-flight for the first computation
+
+
+def _refresh_congestion_heavy() -> dict:
+    with contextmanager(get_oei_db)() as conn:
+        return _compute_congestion_heavy(conn)
+
+
+_heavy = RefreshingCache("congestion", CONGESTION_TTL_S, _refresh_congestion_heavy)
 
 
 @router.get("/congestion-astronomy")
@@ -269,7 +274,7 @@ def congestion_astronomy(db: Annotated[psycopg.Connection, Depends(get_oei_db)])
     the satellite ``oei`` catalog (read-only). The altitude x inclination bins are a catalog-density
     proxy; shells roll them up into ~200 km bands. This is catalog density, not conjunction data.
     """
-    heavy = _congestion_heavy(db)
+    heavy = _heavy.get(lambda: _compute_congestion_heavy(db))
     with db.cursor() as cur:
         cur.execute(_LAUNCH_WINDOWS_SQL)
         windows = cur.fetchone()
@@ -287,47 +292,6 @@ def congestion_astronomy(db: Annotated[psycopg.Connection, Depends(get_oei_db)])
         "note": "IAU Centre for the Protection of the Dark and Quiet Sky from Satellite "
         "Constellation Interference (IAU CPS) coordinates the community response to this issue.",
     }
-
-
-def _congestion_heavy(db: psycopg.Connection) -> dict:
-    global _heavy_cached, _heavy_refreshing
-    with _heavy_state:
-        entry = _heavy_cached
-        if entry is not None:
-            if time.monotonic() - entry[0] >= CONGESTION_TTL_S and not _heavy_refreshing:
-                _heavy_refreshing = True
-                try:
-                    threading.Thread(target=_refresh_congestion_heavy, daemon=True).start()
-                except Exception:
-                    # The flag would otherwise stay set with no thread to clear it, and no
-                    # later request would ever refresh again.
-                    _heavy_refreshing = False
-                    log.exception(
-                        "could not start the congestion refresh; serving the previous numbers"
-                    )
-            return entry[1]
-    with _heavy_cold:
-        with _heavy_state:
-            if _heavy_cached is not None:
-                return _heavy_cached[1]
-        heavy = _compute_congestion_heavy(db)
-        with _heavy_state:
-            _heavy_cached = (time.monotonic(), heavy)
-        return heavy
-
-
-def _refresh_congestion_heavy() -> None:
-    global _heavy_cached, _heavy_refreshing
-    try:
-        with contextmanager(get_oei_db)() as conn:
-            heavy = _compute_congestion_heavy(conn)
-        with _heavy_state:
-            _heavy_cached = (time.monotonic(), heavy)
-    except Exception:
-        log.exception("congestion refresh failed; the previous numbers stay in service")
-    finally:
-        with _heavy_state:
-            _heavy_refreshing = False
 
 
 def _compute_congestion_heavy(db: psycopg.Connection) -> dict:

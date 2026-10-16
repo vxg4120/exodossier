@@ -1,31 +1,34 @@
 """GET /api/stats -- graph totals, cross-source conflict counts, and the ingestion ledger.
 
 The graph changes only on the nightly rebuild, while Overview, Conflicts and About each ask for
-these numbers on load and the conflict counts are four full-table aggregates — so the response is
-memoized for a short TTL and the views share one computation.
+these numbers on load and the conflict counts are three full-graph aggregates — so the response
+is memoised (``api.cache``): warmed at start-up, served from memory, refreshed in the background
+once stale, and computed once when several cold requests arrive together.
 """
 
-import time
+from contextlib import contextmanager
 from typing import Annotated, Any
 
 import psycopg
 from fastapi import APIRouter, Depends
 
+from api.cache import RefreshingCache
 from api.deps import get_db
 from api.queries import catalog_stats
 
 router = APIRouter(tags=["stats"])
 
 STATS_TTL_S = 300.0
-_cached: tuple[float, dict[str, Any]] | None = None  # (monotonic time computed, response)
+
+
+def _refresh_stats() -> dict[str, Any]:
+    with contextmanager(get_db)() as conn:
+        return catalog_stats(conn)
+
+
+stats_cache: RefreshingCache[dict[str, Any]] = RefreshingCache("stats", STATS_TTL_S, _refresh_stats)
 
 
 @router.get("/stats")
 def get_stats(db: Annotated[psycopg.Connection, Depends(get_db)]):
-    global _cached
-    now = time.monotonic()
-    if _cached is not None and now - _cached[0] < STATS_TTL_S:
-        return _cached[1]
-    stats = catalog_stats(db)
-    _cached = (now, stats)
-    return stats
+    return stats_cache.get(lambda: catalog_stats(db))

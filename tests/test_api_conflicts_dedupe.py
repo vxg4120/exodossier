@@ -120,6 +120,10 @@ def test_disposition_twins_are_one_row_and_one_count(graph):
     assert page["total"] == 1
     assert queries.count_disposition_conflicts(graph) == 1
     assert queries.count_disposition_conflicts(graph, dramatic_only=True) == 1
+    # catalog_stats now takes both counts from one query (count(*) FILTER (WHERE dramatic));
+    # it must agree with the two single-purpose counts on a planted graph.
+    stats_conflicts = queries.catalog_stats(graph)["conflicts"]
+    assert (stats_conflicts["disposition"], stats_conflicts["disposition_dramatic"]) == (1, 1)
     (row,) = page["rows"]
     assert row["candidate_id"] == min(a, b)
     assert row["dramatic"] is True

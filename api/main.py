@@ -10,13 +10,25 @@ with full provenance — it does not yet adjudicate or confirm.
 """
 
 import pathlib
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.routers import attribution, conflicts, search, stats, target, twoskies
 
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    # The landing page's two expensive responses are computed once, now, on daemon threads, so
+    # the first visitor after a restart (or a deploy) is served from memory like everyone else.
+    stats.stats_cache.warm(keep_warm=True)
+    conflicts.first_disposition_page.warm(keep_warm=True)
+    yield
+
+
 app = FastAPI(
+    lifespan=lifespan,
     title="ExoDossier — Exoplanet Conflict Explorer API",
     description=(
         "Read-only JSON API over the ExoDossier identity graph: canonical stars/candidates, the "

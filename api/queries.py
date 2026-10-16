@@ -271,9 +271,16 @@ def catalog_stats(db: psycopg.Connection) -> dict[str, Any]:
         )
         totals = cur.fetchone()
 
+        # Both disposition counts come out of one pass over the ``conflicted`` set; the identity
+        # relation underneath it is the expensive part, so it is built once here, not twice.
+        cur.execute(
+            _DISPO_CTE
+            + "SELECT count(*) AS n, count(*) FILTER (WHERE dramatic) AS dramatic FROM conflicted"
+        )
+        dispo = cur.fetchone()
         conflicts = {
-            "disposition": count_disposition_conflicts(db),
-            "disposition_dramatic": count_disposition_conflicts(db, dramatic_only=True),
+            "disposition": dispo["n"],
+            "disposition_dramatic": dispo["dramatic"],
             "radius": count_numeric_conflicts(db, "radius"),
             "teff": count_numeric_conflicts(db, "teff"),
         }
