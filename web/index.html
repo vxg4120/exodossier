@@ -4,12 +4,116 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="dark" />
-    <title>ExoDossier — Exoplanet Conflict Explorer</title>
+    <title>ExoDossier · Exoplanet Conflict Explorer</title>
+    <!-- The title, description and canonical below are the root values; RouteMeta (src/seo.ts)
+         rewrites them per route once the app mounts. Keep the root copy here and there in step. -->
     <meta
       name="description"
-      content="A read-only catalog over the exoplanet identity graph: TIC/TOI/CTOI/KOI/Gaia crosswalks, per-source provenance, and where the archives disagree about the same star or candidate. Surfaces disagreement; does not adjudicate."
+      content="A read-only catalog over the exoplanet identity graph. It crosswalks TIC, TOI, CTOI, KOI and Gaia identifiers, records what each source asserts with its provenance, and shows where the NASA Exoplanet Archive, ExoFOP and the Kepler KOI table disagree about the same star or candidate. It surfaces disagreement and does not adjudicate."
     />
-  
+    <meta name="author" content="Vibhav Gupta" />
+    <meta name="theme-color" content="#07090c" />
+    <link rel="canonical" href="https://exo.vibcreates.com/" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="ExoDossier" />
+    <meta property="og:title" content="ExoDossier · Exoplanet Conflict Explorer" />
+    <meta
+      property="og:description"
+      content="A read-only catalog over the exoplanet identity graph. It crosswalks TIC, TOI, CTOI, KOI and Gaia identifiers, records what each source asserts with its provenance, and shows where the NASA Exoplanet Archive, ExoFOP and the Kepler KOI table disagree about the same star or candidate. It surfaces disagreement and does not adjudicate."
+    />
+    <meta property="og:url" content="https://exo.vibcreates.com/" />
+    <meta property="og:image" content="https://exo.vibcreates.com/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="The ExoDossier overview page with its live catalog counts." />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="ExoDossier · Exoplanet Conflict Explorer" />
+    <meta
+      name="twitter:description"
+      content="A read-only catalog over the exoplanet identity graph. It crosswalks TIC, TOI, CTOI, KOI and Gaia identifiers, records what each source asserts with its provenance, and shows where the NASA Exoplanet Archive, ExoFOP and the Kepler KOI table disagree about the same star or candidate. It surfaces disagreement and does not adjudicate."
+    />
+    <meta name="twitter:image" content="https://exo.vibcreates.com/og.png" />
+
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "WebSite",
+          "@id": "https://exo.vibcreates.com/#website",
+          "name": "ExoDossier",
+          "url": "https://exo.vibcreates.com/",
+          "description": "A read-only catalog over the exoplanet identity graph. It crosswalks TIC, TOI, CTOI, KOI and Gaia identifiers, records what each source asserts with its provenance, and shows where the NASA Exoplanet Archive, ExoFOP and the Kepler KOI table disagree about the same star or candidate. It surfaces disagreement and does not adjudicate.",
+          "author": { "@id": "https://vibcreates.com/#person" }
+        },
+        {
+          "@type": "Person",
+          "@id": "https://vibcreates.com/#person",
+          "name": "Vibhav Gupta",
+          "url": "https://vibcreates.com"
+        },
+        {
+          "@type": "Dataset",
+          "@id": "https://exo.vibcreates.com/#dataset",
+          "name": "ExoDossier exoplanet identity graph",
+          "description": "One resolved record per host star and candidate, stitched from the NASA Exoplanet Archive, ExoFOP and the Kepler KOI table, with every source assertion kept alongside its provenance and the cross-source conflicts in disposition, planet radius and host temperature computed from them. The catalog is read-only and recomputed as the archives refresh.",
+          "url": "https://exo.vibcreates.com/",
+          "creator": { "@id": "https://vibcreates.com/#person" },
+          "isAccessibleForFree": true,
+          "keywords": [
+            "exoplanet",
+            "TESS",
+            "TOI",
+            "CTOI",
+            "TIC",
+            "KOI",
+            "Kepler",
+            "Gaia",
+            "ExoFOP",
+            "NASA Exoplanet Archive",
+            "provenance",
+            "identity graph",
+            "catalog conflicts"
+          ],
+          "distribution": [
+            {
+              "@type": "DataDownload",
+              "name": "Catalog statistics",
+              "contentUrl": "https://exo.vibcreates.com/api/stats",
+              "encodingFormat": "application/json"
+            },
+            {
+              "@type": "DataDownload",
+              "name": "Cross-source conflicts",
+              "contentUrl": "https://exo.vibcreates.com/api/conflicts",
+              "encodingFormat": "application/json"
+            },
+            {
+              "@type": "DataDownload",
+              "name": "Conflict types and counts",
+              "contentUrl": "https://exo.vibcreates.com/api/conflicts/types",
+              "encodingFormat": "application/json"
+            },
+            {
+              "@type": "DataDownload",
+              "name": "Light-curve recovery summary",
+              "contentUrl": "https://exo.vibcreates.com/api/lightcurves/summary",
+              "encodingFormat": "application/json"
+            },
+            {
+              "@type": "DataDownload",
+              "name": "Data source attribution",
+              "contentUrl": "https://exo.vibcreates.com/api/attribution",
+              "encodingFormat": "application/json"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+
   <!-- Visitor analytics. Each service activates only when its id below is filled in; while an
        id is empty nothing loads and no request leaves the page. Ids live here and nowhere else
        on this surface. GA4 wants a measurement id (G-XXXXXXXXXX), Clarity a project id,

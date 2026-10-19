@@ -10,6 +10,7 @@ import { DispositionBadge } from "../components/DispositionBadge";
 import { SourceBadge } from "../components/SourceBadge";
 import { WhoSaysWhat } from "../components/WhoSaysWhat";
 import { Async } from "../components/States";
+import { useDocumentTitle } from "../seo";
 
 function groupBySource(ids: Identifier[]): [string, Identifier[]][] {
   const map = new Map<string, Identifier[]>();
@@ -49,6 +50,7 @@ export function Target() {
 
 function TargetCard({ detail }: { detail: TargetDetail }) {
   const { candidate, star } = detail;
+  useDocumentTitle(candidate.name ? `${candidate.name} · ExoDossier` : undefined);
   const nConflict = detail.conflict_attributes.length;
   const crosswalk = useMemo(() => groupBySource(detail.identifiers), [detail.identifiers]);
 
