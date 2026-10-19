@@ -46,11 +46,11 @@
           "name": "ExoDossier",
           "url": "https://exo.vibcreates.com/",
           "description": "A read-only catalog over the exoplanet identity graph. It crosswalks TIC, TOI, CTOI, KOI and Gaia identifiers, records what each source asserts with its provenance, and shows where the NASA Exoplanet Archive, ExoFOP and the Kepler KOI table disagree about the same star or candidate. It surfaces disagreement and does not adjudicate.",
-          "author": { "@id": "https://vibcreates.com/#person" }
+          "author": { "@id": "https://vibcreates.com/#vib" }
         },
         {
           "@type": "Person",
-          "@id": "https://vibcreates.com/#person",
+          "@id": "https://vibcreates.com/#vib",
           "name": "Vibhav Gupta",
           "url": "https://vibcreates.com"
         },
@@ -60,8 +60,13 @@
           "name": "ExoDossier exoplanet identity graph",
           "description": "One resolved record per host star and candidate, stitched from the NASA Exoplanet Archive, ExoFOP and the Kepler KOI table, with every source assertion kept alongside its provenance and the cross-source conflicts in disposition, planet radius and host temperature computed from them. The catalog is read-only and recomputed as the archives refresh.",
           "url": "https://exo.vibcreates.com/",
-          "creator": { "@id": "https://vibcreates.com/#person" },
+          "creator": { "@id": "https://vibcreates.com/#vib" },
           "isAccessibleForFree": true,
+          "license": "https://opensource.org/licenses/MIT",
+          "isBasedOn": [
+            "https://exoplanetarchive.ipac.caltech.edu/",
+            "https://exofop.ipac.caltech.edu/"
+          ],
           "keywords": [
             "exoplanet",
             "TESS",

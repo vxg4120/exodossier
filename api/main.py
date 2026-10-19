@@ -29,7 +29,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     lifespan=lifespan,
-    title="ExoDossier — Exoplanet Conflict Explorer API",
+    title="ExoDossier · Exoplanet Conflict Explorer API",
     description=(
         "Read-only JSON API over the ExoDossier identity graph: canonical stars/candidates, the "
         "full TIC/TOI/CTOI/KOI/Gaia crosswalk, per-source assertions, and the cross-source "
@@ -61,24 +61,39 @@ def health():
 
 _WEB_DIST = pathlib.Path(__file__).resolve().parent.parent / "web" / "dist"
 if (_WEB_DIST / "index.html").exists():
+    from fastapi.responses import HTMLResponse
     from fastapi.staticfiles import StaticFiles
 
+    from api.seo import render_head
+
+    # The shell is read once here; every SPA response is rendered from this string.
+    _SHELL = (_WEB_DIST / "index.html").read_text(encoding="utf-8")
+
+    def _shell_response(path: str) -> HTMLResponse:
+        """The shell with its head rewritten for ``path`` (api/seo.py): a deep link carries its own
+        title and canonical, and a path no route matches is a real 404 with noindex, while the
+        SPA inside still renders its NotFound view."""
+        body, status = render_head(_SHELL, path)
+        return HTMLResponse(body, status_code=status, headers={"cache-control": "no-cache"})
+
     class _SpaStaticFiles(StaticFiles):
-        """StaticFiles that falls back to index.html so SPA deep links survive a hard refresh,
-        while unknown ``/api/*`` paths keep their real JSON 404 instead of the SPA shell."""
+        """StaticFiles that falls back to the rendered shell so SPA deep links survive a hard
+        refresh, while unknown ``/api/*`` paths keep their real JSON 404 instead of the shell."""
 
         async def get_response(self, path, scope):
             from starlette.exceptions import HTTPException as StarletteHTTPException
 
             is_api = path == "api" or path.startswith("api/")
+            if not is_api and path in ("", "index.html"):
+                return _shell_response("/")
             try:
                 response = await super().get_response(path, scope)
             except StarletteHTTPException as exc:
                 if is_api or exc.status_code != 404:
                     raise
-                return await super().get_response("index.html", scope)
+                return _shell_response("/" + path)
             if response.status_code == 404 and not is_api:
-                response = await super().get_response("index.html", scope)
+                response = _shell_response("/" + path)
             return response
 
     app.mount("/", _SpaStaticFiles(directory=str(_WEB_DIST), html=True), name="spa")
