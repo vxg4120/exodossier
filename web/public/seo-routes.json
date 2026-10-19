@@ -1,0 +1,57 @@
+{
+  "site": {
+    "name": "ExoDossier",
+    "origin": "https://exo.vibcreates.com",
+    "description": "A read-only catalog over the exoplanet identity graph. It crosswalks TIC, TOI, CTOI, KOI and Gaia identifiers, records what each source asserts with its provenance, and shows where the NASA Exoplanet Archive, ExoFOP and the Kepler KOI table disagree about the same star or candidate. It surfaces disagreement and does not adjudicate."
+  },
+  "routes": [
+    {
+      "pattern": "/",
+      "end": true,
+      "title": "ExoDossier · Exoplanet Conflict Explorer",
+      "description": "A read-only catalog over the exoplanet identity graph. It crosswalks TIC, TOI, CTOI, KOI and Gaia identifiers, records what each source asserts with its provenance, and shows where the NASA Exoplanet Archive, ExoFOP and the Kepler KOI table disagree about the same star or candidate. It surfaces disagreement and does not adjudicate."
+    },
+    {
+      "pattern": "/search",
+      "end": true,
+      "title": "Search · ExoDossier",
+      "description": "Resolve any star or candidate by TIC, TOI, CTOI, KOI, planet name or host name, and open its identifier crosswalk and its per-source provenance."
+    },
+    {
+      "pattern": "/target/:id",
+      "end": true,
+      "title": "Target · ExoDossier",
+      "description": "One candidate and its host star: the identifier crosswalk, what every source asserts about each attribute, and where those sources disagree."
+    },
+    {
+      "pattern": "/conflicts",
+      "end": true,
+      "title": "Conflicts · ExoDossier",
+      "description": "Every cross-source disagreement in the catalog, where ExoFOP, the NASA TOI table, the Kepler KOI table and the Archive's per-publication and composite tables describe the same star or candidate differently."
+    },
+    {
+      "pattern": "/lightcurves",
+      "end": true,
+      "title": "Light curves · ExoDossier",
+      "description": "TESS light curves from MAST searched for a periodic transit and graded against the catalog period, as an independent check on the catalogs for a fixed slice of TOIs."
+    },
+    {
+      "pattern": "/followup",
+      "end": true,
+      "title": "Follow-up · ExoDossier",
+      "description": "For a TESS candidate you want to confirm from the ground, which tracked satellites cross its line of sight during your observing window, and who owns them. It joins ExoDossier's hosts to the satellite catalog, and the positions are illustrative."
+    },
+    {
+      "pattern": "/about",
+      "end": true,
+      "title": "About · ExoDossier",
+      "description": "What ExoDossier is, how the disposition, radius and host temperature conflicts are computed, and which archives the data belongs to."
+    },
+    {
+      "pattern": "*",
+      "title": "Page not found · ExoDossier",
+      "description": "Nothing resolves at this path on ExoDossier.",
+      "noindex": true
+    }
+  ]
+}

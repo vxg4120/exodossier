@@ -80,14 +80,6 @@ export function Lightcurves() {
     setOffset(0);
   }, [cohort]);
 
-  useEffect(() => {
-    const previous = document.title;
-    document.title = "Light curves · ExoDossier";
-    return () => {
-      document.title = previous;
-    };
-  }, []);
-
   const summary = useApi<LightcurveSummary>(() => getLightcurveSummary(), []);
   const page = useApi<LightcurveResults>(
     () => getLightcurveResults(LIMIT, offset, cohort),
