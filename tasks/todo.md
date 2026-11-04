@@ -52,3 +52,7 @@ closed port all passed; `pnpm build` clean.
       and States.visitorMessage; the CI web job runs them before the build.
 - [x] H. README: the site's views, the API endpoints, the MCP server that already exists (the
       roadmap called it a later wave), and CI.
+- [x] I. Phone nav strip and stat strip follow orbital's rules: the 00-05 indices go under 560px,
+      links tighten (three views fully visible at 390px instead of two), the right-edge fade is a
+      fixed 40px band and the last view and last stat chip get room to scroll out from under it
+      (measured: last link's right edge meets the fade start exactly, as on orbital).

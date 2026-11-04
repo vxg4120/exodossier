@@ -421,9 +421,6 @@ button {
 .grid--3 {
   grid-template-columns: repeat(3, 1fr);
 }
-.span-2 {
-  grid-column: span 2;
-}
 .stack {
   display: flex;
   flex-direction: column;
@@ -1394,10 +1391,10 @@ button {
     border-bottom: 1px solid var(--rule-2);
     overflow-x: auto;
     scrollbar-width: none;
-    /* right-edge fade: the last item is clipped mid-word otherwise, with
-       nothing saying the row scrolls */
-    -webkit-mask-image: linear-gradient(90deg, #000 85%, transparent);
-    mask-image: linear-gradient(90deg, #000 85%, transparent);
+    /* right-edge fade: the last item is clipped mid-word otherwise, with nothing saying the
+       row scrolls. A fixed 40px band (not a percentage) so it reads the same at every width. */
+    -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 40px), transparent);
+    mask-image: linear-gradient(90deg, #000 calc(100% - 40px), transparent);
   }
   .rail::-webkit-scrollbar {
     display: none;
@@ -1414,6 +1411,10 @@ button {
   .navlink.is-active {
     border-left: none;
     border-bottom-color: var(--signal);
+  }
+  .navlink:last-child {
+    /* room to scroll the last view out from under the fade */
+    margin-right: 40px;
   }
   .rail__foot {
     display: none;
@@ -1473,10 +1474,18 @@ button {
   .panel__meta {
     flex-basis: 100%;
   }
-  /* nav row: tighter links so more of the five fit before the fade */
+  /* nav strip: four views show at 390px instead of two and a half. The 00-05 plate indices
+     go (the names carry the meaning; the indices are ordinal decoration, as on orbital) and
+     the inline padding tightens. */
   .navlink {
-    grid-template-columns: auto 1fr;
-    padding: 9px 12px;
+    display: block;
+    padding: 9px 8px;
+  }
+  .navlink__idx {
+    display: none;
+  }
+  .navlink__name {
+    letter-spacing: 0.05em;
   }
   /* the stat strip gets its own scrolling row under the brand line: squeezed
      between brand and clock it was a 41px sliver. The bar grows to two rows, so
@@ -1489,6 +1498,8 @@ button {
   }
   .topbar__brand {
     min-height: var(--topbar-h);
+    /* the column rule has nothing to divide once the strip moves below the brand line */
+    border-right: none;
   }
   .topbar__tele {
     order: 3;
@@ -1497,14 +1508,18 @@ button {
     min-height: 32px;
     border-top: 1px solid var(--rule);
     /* right-edge fade: the strip scrolls, and says so */
-    -webkit-mask-image: linear-gradient(90deg, #000 85%, transparent);
-    mask-image: linear-gradient(90deg, #000 85%, transparent);
+    -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 36px), transparent);
+    mask-image: linear-gradient(90deg, #000 calc(100% - 36px), transparent);
   }
   .tele {
     flex-direction: row;
     align-items: center;
     justify-content: flex-start;
     gap: 6px;
+  }
+  .tele:last-child {
+    /* room to scroll the last chip out from under the fade */
+    padding-right: 36px;
   }
 }
 
