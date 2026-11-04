@@ -117,6 +117,13 @@ a:hover {
   outline: 1.5px solid var(--signal);
   outline-offset: 1px;
 }
+/* inside a horizontal scroller (the tab strips, the phone rail, a table wrap) a ring drawn
+   outside the box is clipped to two side ticks, so there it is drawn inside the box */
+.tabs .tab:focus-visible,
+.rail .navlink:focus-visible,
+.table-wrap tr:focus-visible {
+  outline-offset: -2px;
+}
 ::selection {
   background: var(--signal-wash);
 }
@@ -360,7 +367,8 @@ button {
   font-size: var(--fs-sm);
   color: var(--ink-dim);
   margin: 4px 0 0;
-  max-width: 74ch;
+  /* the measure shared with orbital */
+  max-width: 72ch;
 }
 
 /* =============================================================================
@@ -372,9 +380,13 @@ button {
 }
 .panel__head {
   display: flex;
-  align-items: center;
+  /* title and meta share a baseline on one row; a pair that does not fit (a tablet column)
+     wraps to a one-line title over a right-aligned meta instead of both breaking mid-phrase */
+  flex-wrap: wrap;
+  align-items: baseline;
   justify-content: space-between;
   gap: 12px;
+  row-gap: 2px;
   padding: 10px 14px;
   border-bottom: 1px solid var(--rule);
 }
@@ -390,6 +402,8 @@ button {
   color: var(--ink);
 }
 .panel__meta {
+  margin-left: auto;
+  text-align: right;
   font-size: var(--fs-micro);
   letter-spacing: 0.05em;
   color: var(--ink-faint);
@@ -400,6 +414,14 @@ button {
 }
 .panel__body--flush {
   padding: 0;
+}
+/* the closing note under a chart or a table — a hint ending the body, or following the shell
+   bars, the forecaster form or a table wrap — keeps one distance, the same as .story__how */
+.panel__body > .hint:last-child,
+.ts-shells + .hint,
+.ts-form + .hint,
+.table-wrap + .hint {
+  margin-top: 12px;
 }
 .grid {
   display: grid;
@@ -848,6 +870,9 @@ button {
 }
 .searchbar:focus-within {
   border-color: var(--signal-dim);
+  /* the ring the input gives up (below) is drawn around the whole bar */
+  outline: 1.5px solid var(--signal);
+  outline-offset: 1px;
 }
 .searchbar__prompt {
   color: var(--signal);
@@ -861,6 +886,8 @@ button {
   font: inherit;
   font-size: var(--fs-md);
   padding: 12px 0;
+}
+.searchbar input:focus-visible {
   outline: none;
 }
 .searchbar input::placeholder {
@@ -970,7 +997,7 @@ button {
 }
 .kv {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 10px 22px;
 }
 .kv__item {
@@ -1432,6 +1459,15 @@ button {
   .rail__foot {
     display: none;
   }
+  /* tab strips scroll under 900px: the same right-edge fade as the rail, with room after the
+     last tab to scroll it out from under the fade */
+  .tabs {
+    -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 32px), transparent);
+    mask-image: linear-gradient(90deg, #000 calc(100% - 32px), transparent);
+  }
+  .tabs .tab:last-child {
+    margin-right: 32px;
+  }
   .grid--stats {
     grid-template-columns: 1fr 1fr;
   }
@@ -1595,6 +1631,14 @@ button {
     padding-top: 12px;
     padding-bottom: 12px;
   }
+  /* inline links (a planet name in a table cell, the colophon's) grow their tap box; the
+     negative margin keeps the line where it was */
+  .dtable td a.mono-hi,
+  .colophon a {
+    display: inline-block;
+    padding: 10px 0;
+    margin: -10px 0;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   * {
@@ -1619,6 +1663,18 @@ button {
 .heatmap__plot {
   position: relative;
   overflow-x: auto;
+}
+/* the plot sizes its cells to the panel (CongestionHeatmap); when even 6px cells overflow, the
+   component marks the scroller and the right edge fades over a 32px allowance so the last column
+   can scroll out from under the fade, as the nav strip and the tab strips do. Keyed on the
+   overflow, not a viewport width: a fade over a plot that fits would hide its last column. */
+.heatmap__plot.is-scroll {
+  -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 32px), transparent);
+  mask-image: linear-gradient(90deg, #000 calc(100% - 32px), transparent);
+}
+.heatmap__plot.is-scroll .hm-svg {
+  padding-right: 32px;
+  box-sizing: content-box;
 }
 .hm-svg {
   display: block;
@@ -1791,7 +1847,6 @@ button {
   font: inherit;
   font-size: var(--fs-sm);
   padding: 8px 10px;
-  outline: none;
 }
 .ts-select:focus,
 .ts-datetime:focus {
@@ -1799,6 +1854,15 @@ button {
 }
 .ts-datetime[aria-invalid="true"] {
   border-color: var(--err);
+}
+@media (max-width: 560px) {
+  /* under 16px iOS WebKit zooms the page when a control takes focus; class specificity, after
+     the control rules, so it wins over their --fs-sm */
+  .ts-select,
+  .ts-datetime,
+  .searchbar input {
+    font-size: 16px;
+  }
 }
 
 /* target conflict marker inside the option label / summary */
@@ -2037,14 +2101,17 @@ button {
   min-width: 0;
 }
 .story__headline {
+  /* a step above the panel title (27 > 19 > 15), the figures lining and tabular; orbital's
+     story lead */
   margin: 0;
   font-family: var(--font-display);
-  font-size: var(--fs-md);
-  font-weight: 460;
+  font-size: var(--fs-lg);
+  font-weight: 420;
   font-variation-settings: "SOFT" 30, "WONK" 0;
-  line-height: 1.45;
+  font-variant-numeric: lining-nums tabular-nums;
+  line-height: 1.4;
   color: var(--ink);
-  max-width: 62ch;
+  max-width: 54ch;
 }
 .panel__body > .story__headline {
   margin-bottom: 12px;
@@ -2413,7 +2480,11 @@ button {
   color: var(--ink-faint);
 }
 .colophon a {
-  color: var(--ink-faint);
+  /* a link, not a label: one ink step up and a dotted rule, told apart without a pointer */
+  color: var(--ink-dim);
+  text-decoration: underline dotted;
+  text-decoration-color: var(--rule-2);
+  text-underline-offset: 3px;
 }
 .colophon a:hover {
   color: var(--signal);

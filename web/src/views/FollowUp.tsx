@@ -266,7 +266,7 @@ export function FollowUp() {
                           </div>
                         ))}
                     </div>
-                    <p className="hint" style={{ marginTop: 8 }}>
+                    <p className="hint">
                       Objects per ~200 km altitude band (km). The occupied shells are where follow-up
                       exposures collect streaks.
                     </p>
@@ -427,7 +427,7 @@ export function FollowUp() {
               </div>
 
               {current ? (
-                <p className="hint" style={{ marginTop: 8 }}>
+                <p className="hint">
                   {current.host} · RA <span className="num">{current.ra_deg.toFixed(3)}°</span> / Dec{" "}
                   <span className="num">{current.dec_deg.toFixed(3)}°</span>
                   {current.candidate_id != null ? (
@@ -528,7 +528,7 @@ function PassesResult({ data }: { data: PassesResponse }) {
         <>
           <DataTable columns={PASS_COLUMNS} rows={data.passes} rowKey={(r) => r.norad} />
           {data.truncated ? (
-            <p className="hint" style={{ marginTop: 8 }}>
+            <p className="hint">
               Showing the {data.passes.length} closest of {fmtInt(data.n_found)} total passes.
             </p>
           ) : null}

@@ -78,6 +78,7 @@ export function Search() {
           error={search.error}
           results={search.data?.results ?? []}
           onPick={(id) => navigate(`/target/${id}`)}
+          reload={search.reload}
         />
       </Panel>
     </div>
@@ -99,21 +100,25 @@ function Examples() {
   );
 }
 
-function Results({
+/** The result list's states. Exported for the unit tests. */
+export function Results({
   query,
   loading,
   error,
   results,
   onPick,
+  reload,
 }: {
   query: string;
   loading: boolean;
   error: string | null;
   results: SearchResult[];
   onPick: (id: number) => void;
+  /** Re-runs the search: retyping the same query does not, so the error state offers it. */
+  reload: () => void;
 }) {
   if (!query) return <Examples />;
-  if (error) return <ErrorState message={error} />;
+  if (error) return <ErrorState message={error} onRetry={reload} />;
   if (loading) return <Loading label="Searching" rows={4} />;
   if (results.length === 0)
     // Echo the query (in its own case: the title is uppercased), say which forms resolve, and put

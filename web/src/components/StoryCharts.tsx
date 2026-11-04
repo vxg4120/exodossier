@@ -1,5 +1,6 @@
-import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import type { ConfirmedPoint, TfopwgCode } from "../api/types";
+import { useWidth } from "../hooks/useWidth";
 import { fmtInt } from "../lib/format";
 import { fmtDay, fmtDayShort, fmtMonth, pct, tfopwgMeta } from "../lib/stories";
 import { TfopwgBadge } from "./DispositionBadge";
@@ -7,25 +8,6 @@ import { TfopwgBadge } from "./DispositionBadge";
 /* Hand-rolled story visuals in the CongestionHeatmap manner: plain SVG and CSS, no chart
    library. The SVGs render at their container's measured pixel width rather than scaling a
    viewBox, so type stays at its token size on a phone instead of shrinking with the plot. */
-
-/** Width of the element, tracked with a ResizeObserver; `fallback` until the first measure. */
-function useWidth<T extends HTMLElement>(fallback: number) {
-  const ref = useRef<T>(null);
-  const [width, setWidth] = useState(fallback);
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    setWidth(el.clientWidth || fallback);
-    if (typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(([entry]) => {
-      const w = Math.floor(entry.contentRect.width);
-      if (w > 0) setWidth(w);
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [fallback]);
-  return [ref, width] as const;
-}
 
 /** 1, 2 or 5 times a power of ten: the step for roughly `n` ticks across `span`. */
 function niceStep(span: number, n: number): number {

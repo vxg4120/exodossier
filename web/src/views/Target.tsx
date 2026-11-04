@@ -56,16 +56,27 @@ function TargetCard({ detail }: { detail: TargetDetail }) {
 
   return (
     <div className="stack">
-      <div className="inline" style={{ justifyContent: "space-between" }}>
-        <Link to="/search" className="hint back-link">
-          ‹ Search
-        </Link>
-        <span className="hint">candidate #{candidate.candidate_id}</span>
-      </div>
+      {/* the chapter head every route opens with (Fraunces narrates); the candidate's name is
+          the dossier's own heading below it, not the page title */}
+      <header className="vhead">
+        <div>
+          <h1 className="vhead__title">Target</h1>
+          <p className="vhead__desc">Every source&rsquo;s claim about one candidate, before resolution.</p>
+        </div>
+        <div className="inline">
+          <Link to="/search" className="hint back-link">
+            ‹ Search
+          </Link>
+          <span className="hint" aria-hidden="true">
+            ·
+          </span>
+          <span className="hint">candidate #{candidate.candidate_id}</span>
+        </div>
+      </header>
 
       <div className={`idhead${nConflict > 0 ? " is-conflict" : ""}`}>
         <div>
-          <h1 className="idhead__name">{candidate.name}</h1>
+          <h2 className="idhead__name">{candidate.name}</h2>
           <div className="idhead__host">
             host <span className="mono-hi">{star.name}</span>
             {star.tic_id ? <span className="muted"> · TIC {star.tic_id}</span> : null}
@@ -125,7 +136,7 @@ function TargetCard({ detail }: { detail: TargetDetail }) {
           <div className="crosswalk-src" key={source}>
             <div className="crosswalk-src__head">
               <SourceBadge source={source} />
-              <span className="hint">{ids.length} ids</span>
+              <span className="hint">{ids.length === 1 ? "1 id" : `${ids.length} ids`}</span>
             </div>
             {ids.map((id, i) => (
               <div className="idpair" key={`${id.id_type}-${id.id_value}-${i}`}>
