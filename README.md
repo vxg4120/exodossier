@@ -72,7 +72,7 @@ Live at <https://exo.vibcreates.com>.
   host name.
 - **Target (`/target/:id`)** — one candidate and its host: the identifier crosswalk, what every
   source asserts about each attribute (the who-says-what table), and where they disagree.
-- **Conflicts (`/conflicts`)** — the browsable corpus: disposition, planet-radius and host-Teff
+- **Conflicts (`/conflicts`)** — the browsable corpus: disposition, planet-radius and host Teff
   disagreements, every row linking to the target.
 - **Light curves (`/lightcurves`)** — the pipeline's transit-recovery results, graded against the
   catalog period.

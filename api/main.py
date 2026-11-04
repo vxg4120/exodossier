@@ -95,7 +95,9 @@ if (_WEB_DIST / "index.html").exists():
             from starlette.exceptions import HTTPException as StarletteHTTPException
 
             is_api = path == "api" or path.startswith("api/")
-            if not is_api and path in ("", "index.html"):
+            # Starlette normalises the mount root to "." before this call, so without it GET /
+            # was the one shell served verbatim (and without no-cache) rather than rendered
+            if not is_api and path in ("", ".", "index.html"):
                 return _shell_response("/")
             try:
                 response = await super().get_response(path, scope)

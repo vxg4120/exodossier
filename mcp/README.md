@@ -93,6 +93,6 @@ The agent calls `search_targets("TOI-1836")`, sees candidate `TOI-1836 c`, then
 > **false positive**, while the Composite table and a published `ps` row call it **confirmed**.
 > ExoDossier surfaces the disagreement with provenance; it does not adjudicate which is right.
 
-Other prompts that work well: *"What are the biggest host-temperature disagreements that could flip
+Other prompts that work well: *"What are the biggest host Teff disagreements that could flip
 a habitable-zone call?"* (`list_conflicts("teff")`), *"Give me the full provenance for Kepler-1517
 b."* (`resolve_target`), *"How many candidates does nobody agree on?"* (`catalog_stats`).

@@ -39,8 +39,9 @@ jobs:
         # fails here, loudly, instead of passing against a developer's local database.
         env:
           DATABASE_URL: postgresql://oei:oei@127.0.0.1:1/exo
-        # pyproject's addopts already carries -q; a second one would hide the final tally line
-        run: pytest -W error -m "not db"
+        # pyproject's addopts already carries -q; a second one would hide the final tally line.
+        # -rs names the tests that skipped (the served-shell test needs a built web/dist).
+        run: pytest -W error -rs -m "not db"
 
   db:
     runs-on: ubuntu-latest
