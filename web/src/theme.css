@@ -121,6 +121,7 @@ a:hover {
    outside the box is clipped to two side ticks, so there it is drawn inside the box */
 .tabs .tab:focus-visible,
 .rail .navlink:focus-visible,
+.results .result-row:focus-visible,
 .table-wrap tr:focus-visible {
   outline-offset: -2px;
 }
@@ -752,9 +753,11 @@ button {
 }
 .btn[aria-busy="true"] {
   /* in flight: the control stays enabled (disabling it would drop keyboard focus) and the
-     handler ignores the repeat press */
+     handler ignores the repeat press; full ink under the fade, so a plain button's dim ink
+     does not drop to 3.3:1 */
   opacity: 0.6;
   cursor: progress;
+  color: var(--ink);
 }
 
 /* ingest ledger run state */
@@ -915,9 +918,9 @@ button {
   background: var(--surface);
   padding: 0 12px;
 }
-.searchbar:focus-within {
+.searchbar:has(input:focus-visible) {
   border-color: var(--signal-dim);
-  /* the ring the input gives up (below) is drawn around the whole bar */
+  /* the ring the input gives up (below) is drawn around the whole bar, for the input only */
   outline: 1.5px solid var(--signal);
   outline-offset: 1px;
 }
@@ -1464,6 +1467,10 @@ button {
    the rail, with room after the last tab to scroll it out from under the fade; over a strip that
    fits (from 1003px up) the fade covers an empty end and is all but invisible. */
 @media (max-width: 1024px) {
+  .tabs .tab {
+    /* a tab reached by keyboard scrolls clear of the fade (App.tsx reveals the focus) */
+    scroll-margin-inline-end: 32px;
+  }
   .tabs {
     -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 32px), transparent);
     mask-image: linear-gradient(90deg, #000 calc(100% - 32px), transparent);
@@ -1497,6 +1504,10 @@ button {
        row scrolls. A fixed 40px band (not a percentage) so it reads the same at every width. */
     -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 40px), transparent);
     mask-image: linear-gradient(90deg, #000 calc(100% - 40px), transparent);
+  }
+  .rail .navlink {
+    /* a view link reached by keyboard scrolls clear of the fade (App.tsx reveals the focus) */
+    scroll-margin-inline-end: 40px;
   }
   .rail::-webkit-scrollbar {
     display: none;
@@ -1557,7 +1568,8 @@ button {
   .topbar__clock {
     display: none;
   }
-  .topbar__help {
+  /* the base rule later in the file has the same specificity, so this one carries the block */
+  .topbar .topbar__help {
     margin: 0 8px;
   }
   /* claims: break between words, never inside one. word-break: break-word
@@ -1604,6 +1616,10 @@ button {
     flex-wrap: wrap;
   }
   .topbar__brand {
+    /* the brand takes the row: the clock, which carried the auto margin that pushed the "?"
+       to the right edge, is hidden on phones */
+    flex: 1;
+    min-width: 0;
     min-height: var(--topbar-h);
     /* the column rule has nothing to divide once the strip moves below the brand line */
     border-right: none;
@@ -1640,6 +1656,11 @@ button {
   }
   /* tables that name their rows in the first column (conflicts, light curves) keep that
      column pinned while the rest scrolls under it (ported from orbital) */
+  .table-wrap--sticky-first {
+    /* a control that scrolled under the pinned column comes back out from under it when it
+       takes the focus */
+    scroll-padding-inline-start: 44vw;
+  }
   .table-wrap--sticky-first th:first-child,
   .table-wrap--sticky-first td:first-child {
     position: sticky;
@@ -1696,13 +1717,25 @@ button {
     padding-top: 12px;
     padding-bottom: 12px;
   }
-  /* inline links (a planet name in a table cell, the colophon's) grow their tap box; the
-     negative margin keeps the line where it was */
-  .dtable td a.mono-hi,
-  .colophon a {
+  /* inline links grow their tap box. In a table cell the negative margin keeps the row where
+     it was (the cell's own padding holds the box); in the colophon the lines sit 4px apart,
+     so there the box pushes the lines apart instead of lying over the next line's link. */
+  .dtable td a.mono-hi {
     display: inline-block;
     padding: 10px 0;
     margin: -10px 0;
+  }
+  .colophon a {
+    display: inline-block;
+    padding: 10px 0;
+  }
+  /* the cell truncates with an ellipsis, which cannot shorten an atomic inline: the link
+     truncates itself on a narrow phone */
+  .table-wrap--sticky-first td:first-child a.mono-hi {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    vertical-align: bottom;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1888,8 +1921,16 @@ button {
   align-items: flex-start;
 }
 .ts-form > .btn--submit {
-  /* the button keeps the row's bottom edge, level with the inputs */
+  /* on a phone the button has a row of its own */
   align-self: flex-end;
+}
+@media (min-width: 561px) {
+  .ts-form > .btn--submit {
+    /* beside the fields: pinned under the label line, level with the inputs, so the start
+       field's validation message (which grows the line) no longer drops it under the pointer */
+    align-self: flex-start;
+    margin-top: 20px;
+  }
 }
 .ts-field {
   display: flex;
@@ -1928,13 +1969,20 @@ button {
 .ts-datetime[aria-invalid="true"] {
   border-color: var(--err);
 }
-@media (max-width: 560px) {
-  /* under 16px iOS WebKit zooms the page when a control takes focus; class specificity, after
-     the control rules, so it wins over their --fs-sm */
+@media (max-width: 560px), (pointer: coarse) {
+  /* under 16px iOS WebKit zooms the page when a control takes focus (a phone in landscape is
+     wider than 560px, so the device trait counts too); class specificity, after the control
+     rules, so it wins over their --fs-sm */
   .ts-select,
   .ts-datetime,
   .searchbar input {
     font-size: 16px;
+  }
+}
+@media (pointer: coarse) {
+  /* declared after the base rule above, which set its own padding after the touch .btn rule */
+  .btn--submit {
+    padding-block: 11px;
   }
 }
 
@@ -2565,7 +2613,7 @@ button {
   /* a link, not a label: one ink step up and a dotted rule, told apart without a pointer */
   color: var(--ink-dim);
   text-decoration: underline dotted;
-  text-decoration-color: var(--rule-2);
+  text-decoration-color: var(--ink-faint);
   text-underline-offset: 3px;
 }
 .colophon a:hover {

@@ -8,6 +8,7 @@ import { RouteMeta } from "./components/RouteMeta";
 import { SourceBadge } from "./components/SourceBadge";
 import { Loading } from "./components/States";
 import { maybeAutoStartTour, startTour } from "./lib/tour";
+import { revealFocus } from "./lib/revealFocus";
 
 const Overview = lazy(() => import("./views/Overview").then((m) => ({ default: m.Overview })));
 const Search = lazy(() => import("./views/Search").then((m) => ({ default: m.Search })));
@@ -71,6 +72,7 @@ function Telemetry() {
 
 export default function App() {
   useEffect(() => maybeAutoStartTour(), []);
+  useEffect(() => revealFocus(), []);
 
   return (
     <div className="app">
