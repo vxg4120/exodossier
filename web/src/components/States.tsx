@@ -94,5 +94,14 @@ export function Async<T>({
   if (state.loading && state.data === null)
     return <Loading label={loadingLabel} rows={loadingRows} />;
   if (state.data === null) return <EmptyState title="No data" />;
+  // a list refetching with `keep` (useApi) stays on screen, dimmed, so its controls keep focus.
+  // The wrapper is there whether or not it is loading: swapping a fragment for a div would
+  // remount the rows and the pager under the very focus this keeps.
+  if (state.keep)
+    return (
+      <div className={state.loading ? "reloading" : undefined} aria-busy={state.loading || undefined}>
+        {children(state.data)}
+      </div>
+    );
   return <>{children(state.data)}</>;
 }

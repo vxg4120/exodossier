@@ -80,9 +80,11 @@ export function Lightcurves() {
   const setOffset = (next: number) => setOffsets((o) => ({ ...o, [cohort ?? "all"]: next }));
 
   const summary = useApi<LightcurveSummary>(() => getLightcurveSummary(), []);
+  // keep: the rows stay on screen, dimmed, while the next page loads, so the pager keeps focus
   const page = useApi<LightcurveResults>(
     () => getLightcurveResults(LIMIT, offset, cohort),
     [cohort, offset],
+    { keep: true },
   );
   // A TOI the current graph no longer resolves has no target page to open (see isLinkable below).
   const open = (r: LightcurveRow) => navigate(`/target/${r.candidate_id}`);
@@ -139,7 +141,7 @@ export function Lightcurves() {
             data.total === 0 && cohort && summary.data?.state === "ready" ? (
               <EmptyState
                 title="No targets in this slice"
-                message="The pipeline has results, but none of its targets fall in this cohort."
+                message="The pipeline has results, but none of its targets fall in this slice."
               />
             ) : data.total === 0 ? (
               <EmptyState
@@ -156,13 +158,22 @@ export function Lightcurves() {
               />
             ) : (
               <>
-                <DataTable<LightcurveRow>
-                  columns={COLUMNS}
-                  rows={data.rows}
-                  rowKey={(r) => r.target_id}
-                  onRowClick={open}
-                  isLinkable={(r) => r.candidate_id !== null}
-                />
+                {data.rows.length === 0 && data.total > 0 ? (
+                  // a page past the end: the list shrank since it was counted
+                  <EmptyState
+                    title="Nothing on this page"
+                    message="The list changed since it was counted. Go back a page."
+                  />
+                ) : (
+                  <DataTable<LightcurveRow>
+                    columns={COLUMNS}
+                    rows={data.rows}
+                    rowKey={(r) => r.target_id}
+                    onRowClick={open}
+                    isLinkable={(r) => r.candidate_id !== null}
+                    stickyFirst
+                  />
+                )}
                 <Pager
                   offset={offset}
                   limit={LIMIT}
@@ -240,7 +251,7 @@ function SummaryStrip({ s }: { s: LightcurveSummary }) {
 const COLUMNS: Column<LightcurveRow>[] = [
   {
     key: "target",
-    header: "Candidate",
+    header: "Target",
     render: (r) => (
       <span>
         {r.candidate_id !== null ? (

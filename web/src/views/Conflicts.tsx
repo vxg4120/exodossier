@@ -14,7 +14,7 @@ import { dispositionMeta } from "../lib/dispositions";
 import { Panel } from "../components/Panel";
 import { DataTable, Pager, type Column } from "../components/DataTable";
 import { DispositionBadge } from "../components/DispositionBadge";
-import { Async } from "../components/States";
+import { Async, EmptyState } from "../components/States";
 
 const LIMIT = 40;
 
@@ -28,7 +28,10 @@ export function Conflicts() {
   const setOffset = (next: number) => setOffsets((o) => ({ ...o, [tab]: next }));
 
   const stats = useApi(() => getStats(), []);
-  const page = useApi<ConflictsResponse>(() => getConflicts(tab, LIMIT, offset), [tab, offset]);
+  // keep: the rows stay on screen, dimmed, while the next page loads, so the pager keeps focus
+  const page = useApi<ConflictsResponse>(() => getConflicts(tab, LIMIT, offset), [tab, offset], {
+    keep: true,
+  });
   const counts = stats.data?.conflicts;
   const open = (r: ConflictRow) => navigate(`/target/${r.candidate_id}`);
 
@@ -71,12 +74,19 @@ export function Conflicts() {
         <Async state={page} loadingLabel="Loading conflicts" loadingRows={10}>
           {(data) => (
             <>
-              {tab === "disposition" ? (
+              {data.rows.length === 0 && data.total > 0 ? (
+                // a page past the end: the list shrank since it was counted
+                <EmptyState
+                  title="Nothing on this page"
+                  message="The list changed since it was counted. Go back a page."
+                />
+              ) : tab === "disposition" ? (
                 <DataTable<ConflictRow>
                   columns={DISPOSITION_COLS}
                   rows={data.rows}
                   rowKey={(r) => r.candidate_id}
                   onRowClick={open}
+                  stickyFirst
                 />
               ) : (
                 <DataTable<ConflictRow>
@@ -84,6 +94,7 @@ export function Conflicts() {
                   rows={data.rows}
                   rowKey={(r) => r.candidate_id}
                   onRowClick={open}
+                  stickyFirst
                 />
               )}
               <Pager
@@ -198,7 +209,7 @@ function numericCols(unit: string): Column<ConflictRow>[] {
     },
     {
       key: "who",
-      header: "By source",
+      header: "Who says what",
       render: (r) => <BySourceRanges rows={(r.by_source as BySourceRange[]) ?? []} />,
     },
   ];

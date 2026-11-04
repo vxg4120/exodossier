@@ -176,11 +176,21 @@ function StoryPanels({ s }: { s: Stories }) {
   const last = c.series[c.series.length - 1];
 
   // The documented empty payload (a cold start with no retained snapshot) has no series: the
-  // tiles would read "0 confirmed planets", which is false, so they wait like the panels do.
+  // tiles would read "0 confirmed planets", which is false, so they wait like the panels do —
+  // all four of them, so the row keeps its shape instead of one tile in four columns.
   if (!last) {
     return (
       <div className="grid grid--stats" data-tour="stats">
-        <StatTile label="Confirmed planets" value="—" sub="waiting for the first archive snapshot" />
+        <StatTile
+          lead
+          hero
+          label="Confirmed planets"
+          value="—"
+          sub="waiting for the first archive snapshot"
+        />
+        <StatTile label="Awaiting a verdict" value="—" sub="TESS candidates (PC or APC) on ExoFOP's list" />
+        <StatTile label="Confirmed by follow-up" value="—" sub="TESS candidates moved to CP" />
+        <StatTile label="Ruled out" value="—" sub="TESS candidates moved to FP or FA" />
       </div>
     );
   }

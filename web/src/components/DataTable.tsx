@@ -16,6 +16,8 @@ interface DataTableProps<Row> {
   /** With onRowClick, which rows actually link; the others render as plain rows (no link
       styling, not focusable, no handler). Every row links when omitted. */
   isLinkable?: (row: Row) => boolean;
+  /** Pin the first column while the rest scrolls sideways (phones only, see theme.css). */
+  stickyFirst?: boolean;
 }
 
 /** Dense hairline table. Numeric columns are right-aligned tabular. When onRowClick is set the
@@ -26,9 +28,10 @@ export function DataTable<Row>({
   rowKey,
   onRowClick,
   isLinkable,
+  stickyFirst,
 }: DataTableProps<Row>) {
   return (
-    <div className="table-wrap">
+    <div className={`table-wrap${stickyFirst ? " table-wrap--sticky-first" : ""}`}>
       <table className="dtable">
         <thead>
           <tr>
@@ -93,12 +96,16 @@ export function Pager({
 }) {
   const from = total === 0 ? 0 : offset + 1;
   const to = Math.min(offset + (shown ?? limit), total);
+  // a page past the end (the list shrank since it was counted) has no range to print
+  const empty = shown === 0 && total > 0;
   const canPrev = offset > 0;
   const canNext = offset + limit < total;
   return (
     <div className="pager">
       <span className="num">
-        {fmtInt(from)}–{fmtInt(to)} of {fmtInt(total)}
+        {empty
+          ? `nothing on this page · ${fmtInt(total)} total`
+          : `${fmtInt(from)}–${fmtInt(to)} of ${fmtInt(total)}`}
       </span>
       <span className="pager__spacer" />
       <button className="btn" disabled={!canPrev} onClick={() => onOffset(Math.max(0, offset - limit))}>

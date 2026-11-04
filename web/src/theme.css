@@ -1217,6 +1217,16 @@ button {
 .state--error .state__title {
   color: var(--err);
 }
+/* a list fetching its next page keeps its table and pager mounted, dimmed (useApi's `keep`,
+   via Async), so the button that asked keeps focus and the scroll position holds */
+.reloading {
+  opacity: 0.55;
+  transition: opacity 0.15s;
+}
+.reloading .dtable,
+.reloading .pager {
+  pointer-events: none;
+}
 /* loading skeleton: hairline-toned bars with a slow shimmer; the global
    prefers-reduced-motion rule stops the animation */
 .skeleton {
@@ -1321,22 +1331,25 @@ button {
   color: var(--ink-dim);
   line-height: 1.7;
 }
-.prose h2 {
-  font-family: var(--font-display);
-  font-size: var(--fs-md);
-  font-weight: 560;
-  font-variation-settings: "SOFT" 0, "WONK" 0;
-  color: var(--ink);
-  letter-spacing: 0.005em;
+/* sub-heads: an h3 one level under the panel's Fraunces title, in the uppercase micro voice
+   both apps use there (the browser's bold 15px mono default outweighed the title above it) */
+.prose h3 {
   margin: 22px 0 8px;
+  font-size: var(--fs-xs);
+  font-weight: 400;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
 }
-.prose h2:first-child {
+.prose h3:first-child {
   margin-top: 0;
 }
 .prose p {
   margin: 0 0 12px;
 }
 .prose code {
+  /* the UA's generic monospace, not the app's mono stack the paragraph is set in */
+  font-family: var(--font-mono);
   background: var(--surface-2);
   border: 1px solid var(--rule);
   padding: 0 4px;
@@ -1442,13 +1455,18 @@ button {
   .grid--stats {
     grid-template-columns: 1fr;
   }
-  /* top bar: drop the sub-line and tighten paddings so brand + clock fit */
+  /* top bar: drop the sub-line and tighten the chip paddings */
   .topbar__sub {
     display: none;
   }
-  .tele,
-  .topbar__clock {
+  .tele {
     padding: 0 10px;
+  }
+  /* brand + clock + "?" still overflowed 360px with the strip on its own row (the "?" wrapped
+     to a third row, a 115px bar), so the clock goes: the strip is the live readout, as on
+     orbital */
+  .topbar__clock {
+    display: none;
   }
   .topbar__help {
     margin: 0 8px;
@@ -1520,6 +1538,31 @@ button {
   .tele:last-child {
     /* room to scroll the last chip out from under the fade */
     padding-right: 36px;
+  }
+  /* by-source chips stay on one line: wrapped, the off-screen "Who says what" column made
+     every conflicts row 150-180px tall for a reason the visitor could not see */
+  .dtable .bysrc {
+    flex-wrap: nowrap;
+  }
+  /* tables that name their rows in the first column (conflicts, light curves) keep that
+     column pinned while the rest scrolls under it (ported from orbital) */
+  .table-wrap--sticky-first th:first-child,
+  .table-wrap--sticky-first td:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    max-width: 44vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    background: var(--surface);
+    box-shadow: 1px 0 0 var(--rule-2);
+  }
+  .table-wrap--sticky-first tbody tr:hover td:first-child {
+    background: var(--surface-2);
+  }
+  .table-wrap--sticky-first tbody tr.is-link:hover td:first-child {
+    background: var(--surface-3);
+    box-shadow: inset 2px 0 0 var(--signal), 1px 0 0 var(--rule-2);
   }
 }
 
@@ -1753,6 +1796,9 @@ button {
 .ts-select:focus,
 .ts-datetime:focus {
   border-color: var(--signal-dim);
+}
+.ts-datetime[aria-invalid="true"] {
+  border-color: var(--err);
 }
 
 /* target conflict marker inside the option label / summary */

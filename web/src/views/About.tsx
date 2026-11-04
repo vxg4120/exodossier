@@ -65,12 +65,12 @@ export function About() {
               <>
                 {" "}— at last load <span className="num">{fmtInt(live.disposition)}</span>{" "}
                 disposition conflicts (<span className="num">{live.disposition_dramatic}</span> of
-                the dramatic kind), <span className="num">{fmtInt(live.teff)}</span> host-Teff and{" "}
+                the dramatic kind), <span className="num">{fmtInt(live.teff)}</span> host Teff and{" "}
                 <span className="num">{fmtInt(live.radius)}</span> radius conflicts
               </>
             ) : null}
             . The frozen v0 conflict report (generated 2026-07-15) recorded 3,274 disposition
-            conflicts (3 dramatic), 1,083 host-Teff and 3,614 radius conflicts; those figures are
+            conflicts (3 dramatic), 1,083 host Teff and 3,614 radius conflicts; those figures are
             that snapshot&rsquo;s baseline, not the live count.
           </p>
         </div>

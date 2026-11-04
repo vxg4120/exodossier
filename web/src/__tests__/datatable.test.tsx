@@ -1,0 +1,62 @@
+import { describe, expect, it } from "vitest";
+import { renderToStaticMarkup } from "react-dom/server";
+import { Pager } from "../components/DataTable";
+import { Async } from "../components/States";
+
+const noop = () => {};
+
+/** The pager prints the range this page really covers; a page past the end (the list shrank
+    since it was counted) says so instead of an inverted "41–40". */
+describe("Pager", () => {
+  it("ends the range where the page ends", () => {
+    const html = renderToStaticMarkup(
+      <Pager offset={40} limit={40} total={3274} shown={40} onOffset={noop} />,
+    );
+    expect(html).toContain("41–80 of 3,274");
+  });
+  it("names an empty page instead of printing an inverted range", () => {
+    const html = renderToStaticMarkup(
+      <Pager offset={40} limit={40} total={3274} shown={0} onOffset={noop} />,
+    );
+    expect(html).toContain("nothing on this page · 3,274 total");
+    expect(html).not.toContain("41–40");
+  });
+  it("prints 0–0 of 0 for an empty list", () => {
+    const html = renderToStaticMarkup(<Pager offset={0} limit={40} total={0} shown={0} onOffset={noop} />);
+    expect(html).toContain("0–0 of 0");
+  });
+});
+
+/** A list refetching with useApi's `keep` stays on screen, dimmed and marked busy, so the pager
+    that asked for the next page is never unmounted under the keyboard focus. */
+describe("Async with a kept list", () => {
+  const list = (rows: string[]) => (
+    <ul>
+      {rows.map((r) => (
+        <li key={r}>{r}</li>
+      ))}
+    </ul>
+  );
+  it("keeps the previous rows mounted inside a busy wrapper while reloading", () => {
+    const state = { data: ["row-a", "row-b"], loading: true, error: null, reload: noop, keep: true };
+    const html = renderToStaticMarkup(<Async state={state}>{list}</Async>);
+    expect(html).toContain('<div class="reloading" aria-busy="true">');
+    expect(html).toContain("<li>row-a</li>");
+  });
+  it("renders the same wrapper, no longer busy, once the page lands (no remount under focus)", () => {
+    const state = { data: ["row-a"], loading: false, error: null, reload: noop, keep: true };
+    const html = renderToStaticMarkup(<Async state={state}>{list}</Async>);
+    expect(html).toBe("<div><ul><li>row-a</li></ul></div>");
+  });
+  it("adds no wrapper to a one-shot fetch", () => {
+    const state = { data: ["row-a"], loading: false, error: null, reload: noop };
+    const html = renderToStaticMarkup(<Async state={state}>{list}</Async>);
+    expect(html).toBe("<ul><li>row-a</li></ul>");
+  });
+  it("shows the loader, not a wrapper, when there is nothing to keep yet", () => {
+    const state = { data: null, loading: true, error: null, reload: noop, keep: true };
+    const html = renderToStaticMarkup(<Async state={state}>{list}</Async>);
+    expect(html).not.toContain("reloading");
+    expect(html).toContain("state--loading");
+  });
+});

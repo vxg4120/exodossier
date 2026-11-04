@@ -37,6 +37,8 @@ interface PassState {
   loading: boolean;
   data: PassesResponse | null;
   error: string | null;
+  /** A forecast was on screen when a setting changed: the slot says so, not "no forecast yet". */
+  stale: boolean;
 }
 
 const PASS_COLUMNS: Column<PassesResponse["passes"][number]>[] = [
@@ -86,7 +88,16 @@ export function FollowUp() {
   const [site, setSite] = useState<string>("kitt_peak");
   const [windowMin, setWindowMin] = useState<number>(60);
   const [sepDeg, setSepDeg] = useState<number>(5);
-  const [passes, setPasses] = useState<PassState>({ loading: false, data: null, error: null });
+  const [passes, setPasses] = useState<PassState>({
+    loading: false,
+    data: null,
+    error: null,
+    stale: false,
+  });
+  // The start field's own validation message: a form slip is not a lost signal, so it never
+  // goes through the fetch-error state (and its Retry).
+  const [formError, setFormError] = useState<string | null>(null);
+  const whenRef = useRef<HTMLInputElement>(null);
 
   const targetList = useMemo(
     () => (prefill ? [prefill, ...(targets.data?.targets ?? [])] : targets.data?.targets ?? []),
@@ -103,33 +114,43 @@ export function FollowUp() {
 
   // A forecast belongs to the target, start, site and window it was run with: when any of them
   // changes the old table goes, so the hint line above it can never describe another target's
-  // passes.
+  // passes — and the slot says the settings changed, so a forecast never vanishes without a word.
   const currentKey = current ? `${selected}:${current.ra_deg},${current.dec_deg}` : "";
   // Each run carries this nonce; a change to the query bumps it, so a forecast still in flight
   // for the previous target, start, site or window is dropped when it lands instead of shown.
   const runId = useRef(0);
   useEffect(() => {
     runId.current += 1;
-    setPasses((p) => (p.data || p.error || p.loading ? { loading: false, data: null, error: null } : p));
+    setPasses((p) =>
+      p.data || p.error || p.loading
+        ? { loading: false, data: null, error: null, stale: Boolean(p.data) }
+        : p,
+    );
   }, [currentKey, when, site, windowMin, sepDeg]);
 
   function run() {
     if (!current) return;
     const start = new Date(when);
     if (Number.isNaN(start.getTime())) {
-      setPasses({ loading: false, data: null, error: "Enter a start date and time first." });
+      setFormError("Enter a start date and time first.");
+      whenRef.current?.focus();
       return;
     }
     const iso = start.toISOString();
     const mine = ++runId.current;
-    setPasses({ loading: true, data: null, error: null });
+    setPasses({ loading: true, data: null, error: null, stale: false });
     getPasses({ ra: current.ra_deg, dec: current.dec_deg, datetime: iso, site, window_min: windowMin, sep_deg: sepDeg })
       .then((data) => {
-        if (mine === runId.current) setPasses({ loading: false, data, error: null });
+        if (mine === runId.current) setPasses({ loading: false, data, error: null, stale: false });
       })
       .catch((e: unknown) => {
         if (mine !== runId.current) return;
-        setPasses({ loading: false, data: null, error: e instanceof Error ? e.message : "Request failed" });
+        setPasses({
+          loading: false,
+          data: null,
+          error: e instanceof Error ? e.message : "Request failed",
+          stale: false,
+        });
       });
   }
 
@@ -325,11 +346,27 @@ export function FollowUp() {
                   </label>
                   <input
                     id="ts-when"
+                    ref={whenRef}
                     className="ts-datetime"
                     type="datetime-local"
                     value={when}
-                    onChange={(e) => setWhen(e.target.value)}
+                    aria-invalid={formError ? true : undefined}
+                    aria-describedby={formError ? "ts-when-err" : undefined}
+                    onChange={(e) => {
+                      setWhen(e.target.value);
+                      setFormError(null);
+                    }}
                   />
+                  {formError ? (
+                    <p
+                      id="ts-when-err"
+                      role="alert"
+                      className="hint"
+                      style={{ color: "var(--err)", margin: 0 }}
+                    >
+                      {formError}
+                    </p>
+                  ) : null}
                 </div>
 
                 <div className="ts-field">
@@ -418,6 +455,11 @@ export function FollowUp() {
                   <ErrorState message={passes.error} onRetry={run} />
                 ) : passes.data ? (
                   <PassesResult data={passes.data} />
+                ) : passes.stale ? (
+                  <EmptyState
+                    title="Forecast out of date"
+                    message="The settings changed since the last run. Run the forecast again for this target, time and window."
+                  />
                 ) : (
                   <EmptyState
                     title="No forecast yet"

@@ -55,7 +55,7 @@ export function Search() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="e.g. TRAPPIST-1, TOI-1836, Kepler-1517 b, K03728.01, TIC 278892590"
-          aria-label="Search targets"
+          aria-label="Search stars and candidates"
           autoComplete="off"
           spellCheck={false}
         />
