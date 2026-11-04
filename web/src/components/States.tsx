@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import type { AsyncState } from "../hooks/useApi";
 
 /** Spinner + label. With `rows`, also a shimmering skeleton of that many lines, so the page holds
@@ -50,8 +50,22 @@ export function visitorMessage(raw: string): string {
   return raw;
 }
 
-export function ErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {
+export function ErrorState({
+  message,
+  onRetry,
+  focusRetry,
+}: {
+  message: string;
+  onRetry?: () => void;
+  /** Take the focus if it fell to the body: the error replaced a list whose pager or sort
+      button the keyboard was on, so Enter retries instead of starting over from the top. */
+  focusRetry?: boolean;
+}) {
   const shown = visitorMessage(message);
+  const retryRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (focusRetry && document.activeElement === document.body) retryRef.current?.focus();
+  }, [focusRetry]);
   return (
     <div className="state state--error" role="alert">
       <h2 className="state__title">Signal lost</h2>
@@ -59,7 +73,7 @@ export function ErrorState({ message, onRetry }: { message: string; onRetry?: ()
         {shown}
       </span>
       {onRetry ? (
-        <button className="btn" onClick={onRetry}>
+        <button ref={retryRef} className="btn" onClick={onRetry}>
           Retry
         </button>
       ) : null}
@@ -90,7 +104,8 @@ export function Async<T>({
   loadingRows?: number;
   children: (data: T) => ReactNode;
 }) {
-  if (state.error) return <ErrorState message={state.error} onRetry={state.reload} />;
+  if (state.error)
+    return <ErrorState message={state.error} onRetry={state.reload} focusRetry={Boolean(state.keep)} />;
   if (state.loading && state.data === null)
     return <Loading label={loadingLabel} rows={loadingRows} />;
   if (state.data === null) return <EmptyState title="No data" />;
@@ -99,7 +114,22 @@ export function Async<T>({
   // remount the rows and the pager under the very focus this keeps.
   if (state.keep)
     return (
-      <div className={state.loading ? "reloading" : undefined} aria-busy={state.loading || undefined}>
+      <div
+        className={state.loading ? "reloading" : undefined}
+        aria-busy={state.loading || undefined}
+        // pointer-events: none (theme.css) stops the mouse while the page loads; this stops the
+        // keyboard the same way (Enter and Space arrive as a click), so a second press on Next
+        // cannot page past the request in flight. Not `inert`: that would take the focus away
+        // from the very button the wrapper exists to keep it on.
+        onClickCapture={
+          state.loading
+            ? (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              }
+            : undefined
+        }
+      >
         {children(state.data)}
       </div>
     );

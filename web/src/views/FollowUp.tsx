@@ -33,12 +33,21 @@ function hms(iso: string): string {
   return `${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}`;
 }
 
-interface PassState {
+export interface PassState {
   loading: boolean;
   data: PassesResponse | null;
   error: string | null;
   /** A forecast was on screen when a setting changed: the slot says so, not "no forecast yet". */
   stale: boolean;
+}
+
+/** What the forecast slot becomes when a setting changes under it: a forecast on screen goes,
+    and the slot says the settings changed; an error or a run in flight goes without that word;
+    an idle slot is untouched. Exported for its unit test. */
+export function afterSettingsChange(p: PassState): PassState {
+  return p.data || p.error || p.loading
+    ? { loading: false, data: null, error: null, stale: Boolean(p.data) }
+    : p;
 }
 
 const PASS_COLUMNS: Column<PassesResponse["passes"][number]>[] = [
@@ -121,11 +130,7 @@ export function FollowUp() {
   const runId = useRef(0);
   useEffect(() => {
     runId.current += 1;
-    setPasses((p) =>
-      p.data || p.error || p.loading
-        ? { loading: false, data: null, error: null, stale: Boolean(p.data) }
-        : p,
-    );
+    setPasses(afterSettingsChange);
   }, [currentKey, when, site, windowMin, sepDeg]);
 
   function run() {

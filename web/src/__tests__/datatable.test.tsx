@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { Pager } from "../components/DataTable";
+import { Pager, pastTheEnd } from "../components/DataTable";
 import { Async } from "../components/States";
 
 const noop = () => {};
@@ -35,6 +35,31 @@ describe("Pager", () => {
     const last = renderToStaticMarkup(<Pager offset={40} limit={40} total={60} shown={20} onOffset={noop} />);
     expect(last).toContain('<button class="btn">‹ Prev');
     expect(last).toContain('aria-disabled="true">Next ›');
+  });
+  // an aria-disabled button is still focusable and still fires onClick, so the handlers carry
+  // the guard the disabled attribute used to provide (Pager has no hooks, so it is called as a
+  // plain function here and its buttons' handlers are invoked directly)
+  it("ignores activation of an inert end button", () => {
+    const presses = (offset: number) => {
+      const calls: number[] = [];
+      const tree = Pager({ offset, limit: 40, total: 60, shown: 40, onOffset: (n) => calls.push(n) });
+      const [, , prev, next] = tree.props.children;
+      prev.props.onClick();
+      next.props.onClick();
+      return calls;
+    };
+    expect(presses(0)).toEqual([40]);
+    expect(presses(40)).toEqual([0]);
+  });
+  it("names a page past the end only when the list still has rows", () => {
+    expect(pastTheEnd(0, 3274)).toBe(true);
+    expect(pastTheEnd(0, 0)).toBe(false);
+    expect(pastTheEnd(40, 3274)).toBe(false);
+  });
+  it("makes Next inert on a page past the end", () => {
+    const html = renderToStaticMarkup(<Pager offset={40} limit={40} total={3274} shown={0} onOffset={noop} />);
+    expect(html).toContain('aria-disabled="true">Next ›');
+    expect(html).toContain('<button class="btn">‹ Prev');
   });
 });
 

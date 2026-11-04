@@ -10,7 +10,7 @@ import type {
 import { useApi } from "../hooks/useApi";
 import { fmtDate, fmtInt, fmtNum } from "../lib/format";
 import { Panel } from "../components/Panel";
-import { Cell, DataTable, Pager, type Column } from "../components/DataTable";
+import { Cell, DataTable, Pager, pastTheEnd, type Column } from "../components/DataTable";
 import { StatTile } from "../components/StatTile";
 import { Async, EmptyState } from "../components/States";
 
@@ -160,7 +160,7 @@ export function Lightcurves() {
               />
             ) : (
               <>
-                {data.rows.length === 0 && data.total > 0 ? (
+                {pastTheEnd(data.rows.length, data.total) ? (
                   // a page past the end: the list shrank since it was counted
                   <EmptyState
                     title="Nothing on this page"
@@ -180,7 +180,7 @@ export function Lightcurves() {
                   offset={offset}
                   limit={LIMIT}
                   total={data.total}
-                  shown={data.rows.length}
+                  shown={page.loading ? undefined : data.rows.length}
                   onOffset={setOffset}
                 />
               </>

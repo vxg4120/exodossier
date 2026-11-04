@@ -12,7 +12,7 @@ import { fmtInt, fmtNum } from "../lib/format";
 import { CONFLICT_TABS, toConflictTab } from "../lib/conflicts";
 import { dispositionMeta } from "../lib/dispositions";
 import { Panel } from "../components/Panel";
-import { DataTable, Pager, type Column } from "../components/DataTable";
+import { DataTable, Pager, pastTheEnd, type Column } from "../components/DataTable";
 import { DispositionBadge } from "../components/DispositionBadge";
 import { Async, EmptyState } from "../components/States";
 
@@ -76,7 +76,7 @@ export function Conflicts() {
         <Async state={page} loadingLabel="Loading conflicts" loadingRows={10}>
           {(data) => (
             <>
-              {data.rows.length === 0 && data.total > 0 ? (
+              {pastTheEnd(data.rows.length, data.total) ? (
                 // a page past the end: the list shrank since it was counted
                 <EmptyState
                   title="Nothing on this page"
@@ -103,7 +103,7 @@ export function Conflicts() {
                 offset={offset}
                 limit={LIMIT}
                 total={data.total}
-                shown={data.rows.length}
+                shown={page.loading ? undefined : data.rows.length}
                 onOffset={setOffset}
               />
             </>

@@ -131,7 +131,11 @@ function TargetCard({ detail }: { detail: TargetDetail }) {
         </p>
       </Panel>
 
-      <Panel title="Identifier crosswalk" meta={`${detail.identifiers.length} ids · by source`} flush>
+      <Panel
+        title="Identifier crosswalk"
+        meta={`${detail.identifiers.length === 1 ? "1 id" : `${detail.identifiers.length} ids`} · by source`}
+        flush
+      >
         {crosswalk.map(([source, ids]) => (
           <div className="crosswalk-src" key={source}>
             <div className="crosswalk-src__head">
