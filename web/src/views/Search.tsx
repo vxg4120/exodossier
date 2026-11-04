@@ -8,6 +8,9 @@ import { Panel } from "../components/Panel";
 import { DispositionBadge } from "../components/DispositionBadge";
 import { EmptyState, ErrorState, Loading } from "../components/States";
 
+/** The API answers at most this many hits (api/routers/search.py), with no total. */
+const SEARCH_CAP = 50;
+
 const EXAMPLES = [
   { q: "TRAPPIST-1", label: "TRAPPIST-1 · Teff conflict (5780 K vs ~2560 K)" },
   { q: "Kepler-1517 b", label: "Kepler-1517 b · FALSE POSITIVE vs CONFIRMED" },
@@ -52,7 +55,7 @@ export function Search() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="e.g. TRAPPIST-1, TOI-1836, Kepler-1517 b, K03728.01, TIC 278892590"
-          aria-label="Search targets"
+          aria-label="Search stars and candidates"
           autoComplete="off"
           spellCheck={false}
         />
@@ -60,7 +63,13 @@ export function Search() {
 
       <Panel
         title="Results"
-        meta={search.data ? `${fmtInt(search.data.count)} hits` : ""}
+        meta={
+          search.data
+            ? search.data.count >= SEARCH_CAP
+              ? `first ${fmtInt(SEARCH_CAP)} hits · narrow the search`
+              : `${fmtInt(search.data.count)} hits`
+            : undefined
+        }
         flush
       >
         <Results
@@ -69,6 +78,7 @@ export function Search() {
           error={search.error}
           results={search.data?.results ?? []}
           onPick={(id) => navigate(`/target/${id}`)}
+          reload={search.reload}
         />
       </Panel>
     </div>
@@ -90,21 +100,25 @@ function Examples() {
   );
 }
 
-function Results({
+/** The result list's states. Exported for the unit tests. */
+export function Results({
   query,
   loading,
   error,
   results,
   onPick,
+  reload,
 }: {
   query: string;
   loading: boolean;
   error: string | null;
   results: SearchResult[];
   onPick: (id: number) => void;
+  /** Re-runs the search: retyping the same query does not, so the error state offers it. */
+  reload: () => void;
 }) {
   if (!query) return <Examples />;
-  if (error) return <ErrorState message={error} />;
+  if (error) return <ErrorState message={error} onRetry={reload} />;
   if (loading) return <Loading label="Searching" rows={4} />;
   if (results.length === 0)
     // Echo the query (in its own case: the title is uppercased), say which forms resolve, and put

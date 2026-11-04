@@ -12,7 +12,8 @@ export function compact(n: number | null | undefined): string {
   if (n === null || n === undefined) return DASH;
   const abs = Math.abs(n);
   if (abs < 10_000) return n.toLocaleString("en-US");
-  if (abs < 1_000_000) return trim(n / 1_000) + "K";
+  // round before choosing the unit: 999,950 is "1M", not "1000K"
+  if (Math.abs(Math.round((n / 1_000) * 10) / 10) < 1000) return trim(n / 1_000) + "K";
   return trim(n / 1_000_000) + "M";
 }
 
@@ -20,12 +21,16 @@ function trim(x: number): string {
   return (Math.round(x * 10) / 10).toString();
 }
 
-/** Compact significant-figure number for physical quantities (radius, Teff, period). */
-export function fmtNum(n: number | null | undefined, digits = 3): string {
+/** Significant-figure number for physical quantities (radius, Teff, period). Four figures by
+    default: three rounded a 5,842 K host to "5,840" and a 292.1669° coordinate to "292" in a
+    catalog that promises each source's value. Large values (a BJD epoch, a deep eclipse in
+    ppm) stay in fixed notation with one decimal; only the far tails use an exponent. */
+export function fmtNum(n: number | null | undefined, digits = 4): string {
   if (n === null || n === undefined) return DASH;
   if (n === 0) return "0";
   const abs = Math.abs(n);
-  if (abs >= 100000 || abs < 0.001) return n.toExponential(2);
+  if (abs >= 1e9 || abs < 0.001) return n.toExponential(2);
+  if (abs >= 100000) return n.toLocaleString("en-US", { maximumFractionDigits: 1 });
   const sig = Number(n.toPrecision(digits));
   return sig.toLocaleString("en-US", { maximumFractionDigits: 6 });
 }

@@ -240,13 +240,16 @@ SELECT
         WHERE object_type = 'PAYLOAD' AND launch_date > current_date - 30)  AS payloads_launched_30d
 """
 
+# Payloads still on orbit per current owner. Without the decay filter the count included every
+# payload the operator ever flew (SpaceX: ~13,000 against ~11,000 tracked LEO objects), and the
+# Follow-up tile that divides it by leo_objects read "~113% of LEO".
 _TOP_OPERATORS_SQL = """
 SELECT o.canonical_name AS operator, count(*) AS payloads
 FROM satellite s
 JOIN satellite_operator so ON so.satellite_id = s.satellite_id
     AND so.role = 'owner' AND so.valid_to IS NULL
 JOIN operator o ON o.operator_id = so.operator_id
-WHERE s.object_type = 'PAYLOAD'
+WHERE s.object_type = 'PAYLOAD' AND s.decay_date IS NULL
 GROUP BY o.canonical_name
 ORDER BY count(*) DESC, o.canonical_name
 LIMIT 8
@@ -360,6 +363,15 @@ SELECT * FROM le
 _CACHE: dict = {"built_at": 0.0, "arr": None, "meta": None, "norads": None}
 _CACHE_TTL_S = 1800.0
 _CACHE_LOCK = threading.Lock()
+_BUILD_LOCK = threading.Lock()
+# Propagation holds (nsat x steps) float64 arrays, hundreds of MB for the real LEO catalog; two
+# at a time is the box's budget. A third request waits here rather than exhausting memory.
+_PROPAGATE_SLOTS = threading.BoundedSemaphore(2)
+# The time grid is capped by steps, not only by window and step: a 180-minute window at a
+# 15-second step was 721 steps and ~1.5 GB; the step coarsens to keep the grid under this.
+MAX_STEPS = 241
+# Element sets mean something within days of their epoch; a start centuries away is a typo.
+MAX_START_OFFSET = dt.timedelta(days=3650)
 
 
 def _to_jd(t: dt.datetime) -> float:
@@ -425,21 +437,33 @@ def _build_satrecs(rows: list[dict]) -> tuple[SatrecArray, list[dict], np.ndarra
 
 
 def _get_catalog(db) -> tuple[SatrecArray, list[dict], np.ndarray, bool]:
-    now = time.time()
+    def fresh():
+        return _CACHE["arr"] is not None and time.time() - _CACHE["built_at"] < _CACHE_TTL_S
+
     with _CACHE_LOCK:
-        if _CACHE["arr"] is not None and now - _CACHE["built_at"] < _CACHE_TTL_S:
+        if fresh():
             return _CACHE["arr"], _CACHE["meta"], _CACHE["norads"], False
-    t0 = time.time()
-    with db.cursor() as cur:
-        cur.execute(_FETCH_LEO_SQL, {"maxalt": 2000})
-        rows = cur.fetchall()
-    arr, meta, norads = _build_satrecs(rows)
-    log.info(
-        "twoskies: built %d satrecs from %d rows in %.2fs", len(meta), len(rows), time.time() - t0
-    )
-    with _CACHE_LOCK:
-        _CACHE.update(built_at=time.time(), arr=arr, meta=meta, norads=norads)
-    return arr, meta, norads, True
+    # One build at a time: at TTL expiry every concurrent request used to fetch and build its
+    # own copy. Whoever waits re-checks the cache, which the first builder has filled by then.
+    with _BUILD_LOCK:
+        with _CACHE_LOCK:
+            if fresh():
+                return _CACHE["arr"], _CACHE["meta"], _CACHE["norads"], False
+        t0 = time.time()
+        with db.cursor() as cur:
+            cur.execute(_FETCH_LEO_SQL, {"maxalt": 2000})
+            rows = cur.fetchall()
+        arr, meta, norads = _build_satrecs(rows)
+        log.info(
+            "twoskies: built %d satrecs from %d rows in %.2fs",
+            len(meta), len(rows), time.time() - t0,
+        )
+        if meta:
+            # an empty catalog (no fresh elements yet at startup) is not cached: the next
+            # request looks again instead of answering 503 for the whole TTL
+            with _CACHE_LOCK:
+                _CACHE.update(built_at=time.time(), arr=arr, meta=meta, norads=norads)
+        return arr, meta, norads, True
 
 
 def _parse_datetime(value: str | None) -> dt.datetime:
@@ -447,11 +471,31 @@ def _parse_datetime(value: str | None) -> dt.datetime:
         return dt.datetime.now(dt.UTC)
     try:
         parsed = dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except ValueError as exc:
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=dt.UTC)
+        parsed = parsed.astimezone(dt.UTC)
+    except (ValueError, OverflowError) as exc:
+        # OverflowError: a valid ISO instant at the edge of the calendar (0001-01-01+01:00)
         raise HTTPException(status_code=422, detail=f"invalid datetime: {value!r}") from exc
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=dt.UTC)
-    return parsed.astimezone(dt.UTC)
+    now = dt.datetime.now(dt.UTC)
+    if abs(parsed - now) > MAX_START_OFFSET:
+        raise HTTPException(
+            status_code=422,
+            detail=f"datetime {value!r} is more than ten years from now; element sets are only "
+            "meaningful near their epoch",
+        )
+    return parsed
+
+
+def _time_grid(window_min: int, step_sec: int) -> tuple[int, int]:
+    """(steps, step_sec) for a window: the requested step, coarsened as needed so the grid
+    never exceeds MAX_STEPS points."""
+    step = step_sec
+    steps = int(round(window_min * 60 / step)) + 1
+    if steps > MAX_STEPS:
+        step = math.ceil(window_min * 60 / (MAX_STEPS - 1))
+        steps = int(round(window_min * 60 / step)) + 1
+    return steps, step
 
 
 @router.get("/passes")
@@ -491,7 +535,7 @@ def passes(
             s_elev = elev_km
 
     start = _parse_datetime(datetime)
-    steps = int(round(window_min * 60 / step_sec)) + 1
+    steps, step_sec = _time_grid(window_min, step_sec)
     t_wall = time.time()
 
     arr, meta, norads, rebuilt = _get_catalog(db)
@@ -509,45 +553,56 @@ def passes(
         fr[i] = j - jd[i]
 
     t_prop = time.time()
-    err, rpos, _ = arr.sgp4(jd, fr)  # rpos: (nsat, nt, 3) TEME km; err: (nsat, nt) codes
-    prop_ms = (time.time() - t_prop) * 1000.0
+    # The slot brackets the propagation AND the (nsat x nt) geometry after it: those float64
+    # planes are what a request's memory is made of, so each is dropped as soon as the next is
+    # built and the lot is reduced to per-satellite vectors before the slot is released.
+    with _PROPAGATE_SLOTS:
+        err, rpos, _vel = arr.sgp4(jd, fr)  # rpos: (nsat, nt, 3) TEME km; err: (nsat, nt)
+        del _vel  # velocities are never read; the array is as large as the positions
+        prop_ms = (time.time() - t_prop) * 1000.0
 
-    # --- TEME -> ECEF (rotate about z by GMST), then topocentric geometry ---
-    gmst = np.array([_gmst_rad(jd[i] + fr[i]) for i in range(steps)])
-    cg, sg = np.cos(gmst), np.sin(gmst)
-    x, y, z = rpos[:, :, 0], rpos[:, :, 1], rpos[:, :, 2]
-    xe = cg * x + sg * y
-    ye = -sg * x + cg * y
-    ze = z
+        # --- TEME -> ECEF (rotate about z by GMST), then topocentric geometry ---
+        gmst = np.array([_gmst_rad(jd[i] + fr[i]) for i in range(steps)])
+        cg, sg = np.cos(gmst), np.sin(gmst)
+        x, y, z = rpos[:, :, 0], rpos[:, :, 1], rpos[:, :, 2]
+        tx = (cg * x + sg * y) - obs_ecef[0]
+        ty = (-sg * x + cg * y) - obs_ecef[1]
+        tz = z - obs_ecef[2]
+        del rpos, x, y, z
+        rng = np.sqrt(tx * tx + ty * ty + tz * tz)
+        ux, uy, uz = tx / rng, ty / rng, tz / rng
+        del tx, ty, tz, rng
+        sat_alt = np.arcsin(np.clip(ux * up[0] + uy * up[1] + uz * up[2], -1.0, 1.0))  # (nsat, nt)
 
-    tx = xe - obs_ecef[0]
-    ty = ye - obs_ecef[1]
-    tz = ze - obs_ecef[2]
-    rng = np.sqrt(tx * tx + ty * ty + tz * tz)
-    ux, uy, uz = tx / rng, ty / rng, tz / rng
-    sat_alt = np.arcsin(np.clip(ux * up[0] + uy * up[1] + uz * up[2], -1.0, 1.0))  # (nsat, nt)
+        # Target sightline: ICRS unit vector, rotated into ECEF at each step (same GMST rotation).
+        ra_r, dec_r = math.radians(ra), math.radians(dec)
+        ti = np.array([
+            math.cos(dec_r) * math.cos(ra_r),
+            math.cos(dec_r) * math.sin(ra_r),
+            math.sin(dec_r),
+        ])
+        gx = cg * ti[0] + sg * ti[1]
+        gy = -sg * ti[0] + cg * ti[1]
+        gz = np.full(steps, ti[2])
+        # target altitude (deg) at each step, shape (nt,)
+        tgt_alt = np.degrees(np.arcsin(np.clip(gx * up[0] + gy * up[1] + gz * up[2], -1.0, 1.0)))
 
-    # Target sightline: ICRS unit vector, rotated into ECEF at each step (same GMST rotation).
-    ra_r, dec_r = math.radians(ra), math.radians(dec)
-    ti = np.array([
-        math.cos(dec_r) * math.cos(ra_r),
-        math.cos(dec_r) * math.sin(ra_r),
-        math.sin(dec_r),
-    ])
-    gx = cg * ti[0] + sg * ti[1]
-    gy = -sg * ti[0] + cg * ti[1]
-    gz = np.full(steps, ti[2])
-    # target altitude (deg) at each step, shape (nt,)
-    tgt_alt = np.degrees(np.arcsin(np.clip(gx * up[0] + gy * up[1] + gz * up[2], -1.0, 1.0)))
+        dot = np.clip(ux * gx[None, :] + uy * gy[None, :] + uz * gz[None, :], -1.0, 1.0)
+        del ux, uy, uz
+        sep = np.degrees(np.arccos(dot))  # (nsat, nt)
+        del dot
 
-    dot = np.clip(ux * gx[None, :] + uy * gy[None, :] + uz * gz[None, :], -1.0, 1.0)
-    sep = np.degrees(np.arccos(dot))  # (nsat, nt)
-
-    # Only count steps where the TARGET is observable and the satellite is above the horizon.
-    target_up = tgt_alt >= min_alt_deg  # (nt,)
-    qualifying = target_up[None, :] & (sat_alt > 0.0) & (err == 0)
-    sep_masked = np.where(qualifying, sep, np.inf)
-    closest = sep_masked.min(axis=1)  # (nsat,)
+        # Only count steps where the TARGET is observable and the satellite is above the horizon.
+        target_up = tgt_alt >= min_alt_deg  # (nt,)
+        qualifying = target_up[None, :] & (sat_alt > 0.0) & (err == 0)
+        del err
+        sep_masked = np.where(qualifying, sep, np.inf)
+        del sep, qualifying
+        closest = sep_masked.min(axis=1)  # (nsat,)
+        j_best = sep_masked.argmin(axis=1)  # (nsat,) the step of each closest approach
+        del sep_masked
+        alt_at_best = sat_alt[np.arange(sat_alt.shape[0]), j_best]  # (nsat,) rad
+        del sat_alt
 
     target_max_alt = float(tgt_alt.max())
     target_visible = bool(target_up.any())
@@ -571,7 +626,7 @@ def passes(
     passes_out: list[dict] = []
     tally: Counter[str] = Counter()
     for i in hit_idx:
-        j = int(np.argmin(sep_masked[i]))
+        j = int(j_best[i])
         m = meta[i]
         operator = op_by_id.get(m["satellite_id"])
         tally[operator or "Unattributed"] += 1
@@ -581,7 +636,7 @@ def passes(
             "operator": operator,
             "alt_km": m["alt_km"],
             "closest_sep_deg": round(float(closest[i]), 3),
-            "alt_deg": round(float(math.degrees(sat_alt[i, j])), 2),
+            "alt_deg": round(float(math.degrees(alt_at_best[i])), 2),
             "time_utc": (
                 start + dt.timedelta(seconds=step_sec * j)
             ).isoformat().replace("+00:00", "Z"),

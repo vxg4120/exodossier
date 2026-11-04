@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
   getCongestionAstronomy,
@@ -33,10 +33,21 @@ function hms(iso: string): string {
   return `${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}`;
 }
 
-interface PassState {
+export interface PassState {
   loading: boolean;
   data: PassesResponse | null;
   error: string | null;
+  /** A forecast was on screen when a setting changed: the slot says so, not "no forecast yet". */
+  stale: boolean;
+}
+
+/** What the forecast slot becomes when a setting changes under it: a forecast on screen goes,
+    and the slot says the settings changed; an error or a run in flight goes without that word;
+    an idle slot is untouched. Exported for its unit test. */
+export function afterSettingsChange(p: PassState): PassState {
+  return p.data || p.error || p.loading
+    ? { loading: false, data: null, error: null, stale: Boolean(p.data) }
+    : p;
 }
 
 const PASS_COLUMNS: Column<PassesResponse["passes"][number]>[] = [
@@ -50,7 +61,7 @@ const PASS_COLUMNS: Column<PassesResponse["passes"][number]>[] = [
     render: (r) => <span className="num">{r.closest_sep_deg.toFixed(2)}°</span>,
   },
   { key: "alt", header: "Elev", num: true, render: (r) => <span className="num">{r.alt_deg.toFixed(0)}°</span> },
-  { key: "alt_km", header: "Orbit", num: true, render: (r) => <span className="num">{fmtInt(r.alt_km)} km</span> },
+  { key: "alt_km", header: "Orbit", num: true, render: (r) => <span className="num">{fmtInt(Math.round(r.alt_km))} km</span> },
   { key: "time", header: "Time UTC", num: true, render: (r) => <span className="num">{hms(r.time_utc)}</span> },
 ];
 
@@ -86,7 +97,16 @@ export function FollowUp() {
   const [site, setSite] = useState<string>("kitt_peak");
   const [windowMin, setWindowMin] = useState<number>(60);
   const [sepDeg, setSepDeg] = useState<number>(5);
-  const [passes, setPasses] = useState<PassState>({ loading: false, data: null, error: null });
+  const [passes, setPasses] = useState<PassState>({
+    loading: false,
+    data: null,
+    error: null,
+    stale: false,
+  });
+  // The start field's own validation message: a form slip is not a lost signal, so it never
+  // goes through the fetch-error state (and its Retry).
+  const [formError, setFormError] = useState<string | null>(null);
+  const whenRef = useRef<HTMLInputElement>(null);
 
   const targetList = useMemo(
     () => (prefill ? [prefill, ...(targets.data?.targets ?? [])] : targets.data?.targets ?? []),
@@ -101,15 +121,43 @@ export function FollowUp() {
     if (prefill) setSelected(0);
   }, [prefill]);
 
+  // A forecast belongs to the target, start, site and window it was run with: when any of them
+  // changes the old table goes, so the hint line above it can never describe another target's
+  // passes — and the slot says the settings changed, so a forecast never vanishes without a word.
+  const currentKey = current ? `${selected}:${current.ra_deg},${current.dec_deg}` : "";
+  // Each run carries this nonce; a change to the query bumps it, so a forecast still in flight
+  // for the previous target, start, site or window is dropped when it lands instead of shown.
+  const runId = useRef(0);
+  useEffect(() => {
+    runId.current += 1;
+    setPasses(afterSettingsChange);
+  }, [currentKey, when, site, windowMin, sepDeg]);
+
   function run() {
-    if (!current) return;
-    const iso = new Date(when).toISOString();
-    setPasses({ loading: true, data: null, error: null });
+    // a run in flight ignores the repeat press; the button stays enabled so it keeps focus
+    if (!current || passes.loading) return;
+    const start = new Date(when);
+    if (Number.isNaN(start.getTime())) {
+      setFormError("Enter a start date and time first.");
+      whenRef.current?.focus();
+      return;
+    }
+    const iso = start.toISOString();
+    const mine = ++runId.current;
+    setPasses({ loading: true, data: null, error: null, stale: false });
     getPasses({ ra: current.ra_deg, dec: current.dec_deg, datetime: iso, site, window_min: windowMin, sep_deg: sepDeg })
-      .then((data) => setPasses({ loading: false, data, error: null }))
-      .catch((e: unknown) =>
-        setPasses({ loading: false, data: null, error: e instanceof Error ? e.message : "Request failed" }),
-      );
+      .then((data) => {
+        if (mine === runId.current) setPasses({ loading: false, data, error: null, stale: false });
+      })
+      .catch((e: unknown) => {
+        if (mine !== runId.current) return;
+        setPasses({
+          loading: false,
+          data: null,
+          error: e instanceof Error ? e.message : "Request failed",
+          stale: false,
+        });
+      });
   }
 
   const optLabel = (t: TwoSkyTarget) =>
@@ -145,7 +193,11 @@ export function FollowUp() {
         <Async state={congestion} loadingLabel="Loading congestion field">
           {(c) => {
             const spacex = c.top_operators.find((o) => /spacex/i.test(o.operator));
-            const spacexPct = spacex ? Math.round((100 * spacex.payloads) / c.leo_objects) : null;
+            // on-orbit payloads against the tracked LEO population: a share, so never over 100
+            const spacexPct =
+              spacex && c.leo_objects > 0
+                ? Math.min(100, Math.round((100 * spacex.payloads) / c.leo_objects))
+                : null;
             const shellMax = Math.max(1, ...c.shells.map((s) => s.objects));
             return (
               <>
@@ -179,7 +231,8 @@ export function FollowUp() {
                     sub={
                       spacexPct !== null ? (
                         <>
-                          SpaceX · ~<span className="num">{spacexPct}%</span> of LEO
+                          SpaceX payloads on orbit · ~<span className="num">{spacexPct}%</span> of
+                          tracked LEO
                         </>
                       ) : (
                         "payloads on orbit"
@@ -219,8 +272,8 @@ export function FollowUp() {
                           </div>
                         ))}
                     </div>
-                    <p className="hint" style={{ marginTop: 8 }}>
-                      Objects per ~200 km altitude band (km). The occupied shells are where follow-up
+                    <p className="hint">
+                      Objects per ~200 km altitude band. The occupied shells are where follow-up
                       exposures collect streaks.
                     </p>
                   </div>
@@ -299,11 +352,27 @@ export function FollowUp() {
                   </label>
                   <input
                     id="ts-when"
+                    ref={whenRef}
                     className="ts-datetime"
                     type="datetime-local"
                     value={when}
-                    onChange={(e) => setWhen(e.target.value)}
+                    aria-invalid={formError ? true : undefined}
+                    aria-describedby={formError ? "ts-when-err" : undefined}
+                    onChange={(e) => {
+                      setWhen(e.target.value);
+                      setFormError(null);
+                    }}
                   />
+                  {formError ? (
+                    <p
+                      id="ts-when-err"
+                      role="alert"
+                      className="hint"
+                      style={{ color: "var(--err)", margin: 0 }}
+                    >
+                      {formError}
+                    </p>
+                  ) : null}
                 </div>
 
                 <div className="ts-field">
@@ -358,13 +427,13 @@ export function FollowUp() {
                   </select>
                 </div>
 
-                <button className="btn btn--submit" onClick={run} disabled={!current || passes.loading}>
+                <button className="btn btn--submit" onClick={run} disabled={!current} aria-busy={passes.loading || undefined}>
                   {passes.loading ? "Propagating…" : "Run forecast"}
                 </button>
               </div>
 
               {current ? (
-                <p className="hint" style={{ marginTop: 8 }}>
+                <p className="hint">
                   {current.host} · RA <span className="num">{current.ra_deg.toFixed(3)}°</span> / Dec{" "}
                   <span className="num">{current.dec_deg.toFixed(3)}°</span>
                   {current.candidate_id != null ? (
@@ -392,6 +461,11 @@ export function FollowUp() {
                   <ErrorState message={passes.error} onRetry={run} />
                 ) : passes.data ? (
                   <PassesResult data={passes.data} />
+                ) : passes.stale ? (
+                  <EmptyState
+                    title="Forecast out of date"
+                    message="The settings changed since the last run. Run the forecast again for this target, time and window."
+                  />
                 ) : (
                   <EmptyState
                     title="No forecast yet"
@@ -460,7 +534,7 @@ function PassesResult({ data }: { data: PassesResponse }) {
         <>
           <DataTable columns={PASS_COLUMNS} rows={data.passes} rowKey={(r) => r.norad} />
           {data.truncated ? (
-            <p className="hint" style={{ marginTop: 8 }}>
+            <p className="hint">
               Showing the {data.passes.length} closest of {fmtInt(data.n_found)} total passes.
             </p>
           ) : null}

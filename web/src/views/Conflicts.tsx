@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { getConflicts, getStats } from "../api/client";
 import type {
   BySourceDisposition,
@@ -12,9 +12,9 @@ import { fmtInt, fmtNum } from "../lib/format";
 import { CONFLICT_TABS, toConflictTab } from "../lib/conflicts";
 import { dispositionMeta } from "../lib/dispositions";
 import { Panel } from "../components/Panel";
-import { Cell, DataTable, Pager, type Column } from "../components/DataTable";
+import { DataTable, Pager, pastTheEnd, type Column } from "../components/DataTable";
 import { DispositionBadge } from "../components/DispositionBadge";
-import { Async } from "../components/States";
+import { Async, EmptyState } from "../components/States";
 
 const LIMIT = 40;
 
@@ -22,14 +22,18 @@ export function Conflicts() {
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
   const tab = toConflictTab(params.get("tab"));
-  const [offset, setOffset] = useState(0);
-
-  useEffect(() => {
-    setOffset(0);
-  }, [tab]);
+  // One page offset per tab, so a tab change never first asks for the old page.
+  const [offsets, setOffsets] = useState<Record<string, number>>({});
+  const offset = offsets[tab] ?? 0;
+  const setOffset = (next: number) => setOffsets((o) => ({ ...o, [tab]: next }));
 
   const stats = useApi(() => getStats(), []);
-  const page = useApi<ConflictsResponse>(() => getConflicts(tab, LIMIT, offset), [tab, offset]);
+  // keep: the rows stay on screen, dimmed, while the next page loads, so the pager keeps focus;
+  // keyed by the tab, so a tab change shows the loader, not the old tab's rows under new headers
+  const page = useApi<ConflictsResponse>(() => getConflicts(tab, LIMIT, offset), [tab, offset], {
+    keep: true,
+    keepKey: tab,
+  });
   const counts = stats.data?.conflicts;
   const open = (r: ConflictRow) => navigate(`/target/${r.candidate_id}`);
 
@@ -53,7 +57,9 @@ export function Conflicts() {
             return (
               <button
                 key={t.key}
+                type="button"
                 className={`tab${tab === t.key ? " is-active" : ""}`}
+                aria-pressed={tab === t.key}
                 onClick={() => setParams({ tab: t.key })}
               >
                 {t.tabLabel}
@@ -70,12 +76,19 @@ export function Conflicts() {
         <Async state={page} loadingLabel="Loading conflicts" loadingRows={10}>
           {(data) => (
             <>
-              {tab === "disposition" ? (
+              {pastTheEnd(data.rows.length, data.total) ? (
+                // a page past the end: the list shrank since it was counted
+                <EmptyState
+                  title="Nothing on this page"
+                  message="The list changed since it was counted. Go back a page."
+                />
+              ) : tab === "disposition" ? (
                 <DataTable<ConflictRow>
                   columns={DISPOSITION_COLS}
                   rows={data.rows}
                   rowKey={(r) => r.candidate_id}
                   onRowClick={open}
+                  stickyFirst
                 />
               ) : (
                 <DataTable<ConflictRow>
@@ -83,9 +96,16 @@ export function Conflicts() {
                   rows={data.rows}
                   rowKey={(r) => r.candidate_id}
                   onRowClick={open}
+                  stickyFirst
                 />
               )}
-              <Pager offset={offset} limit={LIMIT} total={data.total} onOffset={setOffset} />
+              <Pager
+                offset={offset}
+                limit={LIMIT}
+                total={data.total}
+                shown={page.loading ? undefined : data.rows.length}
+                onOffset={setOffset}
+              />
             </>
           )}
         </Async>
@@ -128,8 +148,18 @@ function BySourceRanges({ rows }: { rows: BySourceRange[] }) {
   );
 }
 
+/** The row deep-links as a whole (click, Enter); the name is also a real link, so the page can
+    be opened in a new tab and a screen reader hears where the row goes. */
+function TargetLink({ row }: { row: ConflictRow }) {
+  return (
+    <Link to={`/target/${row.candidate_id}`} className="mono-hi" onClick={(e) => e.stopPropagation()}>
+      {row.target}
+    </Link>
+  );
+}
+
 const DISPOSITION_COLS: Column<ConflictRow>[] = [
-  { key: "target", header: "Candidate", render: (r) => <span className="mono-hi">{r.target}</span> },
+  { key: "target", header: "Candidate", render: (r) => <TargetLink row={r} /> },
   { key: "host", header: "Host", render: (r) => r.host },
   {
     key: "resolved",
@@ -156,27 +186,32 @@ const DISPOSITION_COLS: Column<ConflictRow>[] = [
 
 function numericCols(unit: string): Column<ConflictRow>[] {
   return [
-    { key: "target", header: "Candidate", render: (r) => <span className="mono-hi">{r.target}</span> },
+    { key: "target", header: "Candidate", render: (r) => <TargetLink row={r} /> },
     { key: "host", header: "Host", render: (r) => r.host },
     {
       key: "spread",
       header: "Spread",
       num: true,
-      render: (r) => <span className="num" style={{ color: "var(--conflict)" }}>{r.spread_pct}%</span>,
+      render: (r) => (
+        <span className="num" style={{ color: "var(--conflict)" }}>
+          {r.spread_pct == null ? "—" : `${Number(r.spread_pct).toFixed(1)}%`}
+        </span>
+      ),
     },
     {
       key: "range",
       header: `Range (${unit})`,
       num: true,
-      render: (r) => (
-        <span className="num">
-          <Cell>{`${fmtNum(r.min)} – ${fmtNum(r.max)}`}</Cell>
-        </span>
-      ),
+      render: (r) =>
+        r.min == null || r.max == null ? (
+          <span className="dash">—</span>
+        ) : (
+          <span className="num">{`${fmtNum(r.min)} – ${fmtNum(r.max)}`}</span>
+        ),
     },
     {
       key: "who",
-      header: "By source",
+      header: "Who says what",
       render: (r) => <BySourceRanges rows={(r.by_source as BySourceRange[]) ?? []} />,
     },
   ];

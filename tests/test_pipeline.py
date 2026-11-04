@@ -10,7 +10,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from pipeline import detect, process
+pytest.importorskip("pyarrow", reason="pandas needs a Parquet engine (requirements-ingest.txt)")
+
+from pipeline import detect, process  # noqa: E402
 
 TEST_TIC = 990000001  # synthetic; far outside the real TIC range in the graph
 

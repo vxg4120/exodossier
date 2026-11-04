@@ -28,6 +28,7 @@ import conflictsRadius from "./fixtures/conflicts_radius.json";
 import conflictsTeff from "./fixtures/conflicts_teff.json";
 import attributionFixture from "./fixtures/attribution.json";
 import storiesFixture from "./fixtures/stories.json";
+import lightcurvesFixture from "./fixtures/lightcurves.json";
 
 export const MOCK = import.meta.env.VITE_API_MOCK === "1";
 
@@ -42,21 +43,61 @@ export class ApiError extends Error {
 }
 
 /* ---- real transport ------------------------------------------------------- */
+/** Upper bound on any GET, as on orbital. A request the API never answers (a cold cache warming
+    an aggregate, a dropped connection) would otherwise leave the view on its loading state with
+    no way out; past this the caller's Async state shows the error with a Retry control. */
+export const REQUEST_TIMEOUT_MS = 30_000;
+
+/** fetch with the timeout, the JSON accept header and a readable failure for every outcome:
+    a non-2xx status, a timeout, and a body that is not JSON (a proxy's HTML error page served
+    with a 200) each name the path they failed on. */
+export async function fetchJson<T>(url: string, path: string): Promise<T> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, {
+      headers: { accept: "application/json" },
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      let detail = `${res.status} ${res.statusText} for ${path}`;
+      try {
+        const j = (await res.json()) as { detail?: string };
+        if (typeof j?.detail === "string") detail = `${res.status} ${j.detail} for ${path}`;
+      } catch {
+        /* non-JSON error body: keep the status line */
+      }
+      throw new ApiError(detail, res.status);
+    }
+    try {
+      return (await res.json()) as T;
+    } catch {
+      throw new ApiError(`Not JSON from the API for ${path}`, res.status);
+    }
+  } catch (err) {
+    if (controller.signal.aborted) {
+      throw new ApiError(
+        `No answer from the API within ${REQUEST_TIMEOUT_MS / 1000}s for ${path}`,
+        0,
+      );
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function realGet<T>(path: string, params?: Record<string, string | number>): Promise<T> {
   const qs = params
     ? "?" +
       new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)])).toString()
     : "";
-  const res = await fetch(`/api${path}${qs}`, { headers: { accept: "application/json" } });
-  if (!res.ok) {
-    throw new ApiError(`${res.status} ${res.statusText} for ${path}`, res.status);
-  }
-  return (await res.json()) as T;
+  return fetchJson<T>(`/api${path}${qs}`, path);
 }
 
 /* ---- mock transport ------------------------------------------------------- */
 const MOCK_LATENCY_MS = 130;
-const delay = <T>(value: T): Promise<T> =>
+export const delay = <T>(value: T): Promise<T> =>
   new Promise((resolve) => setTimeout(() => resolve(value), MOCK_LATENCY_MS));
 
 const searchPool = (searchFixture as { results: SearchResult[] }).results;
@@ -70,8 +111,14 @@ const conflictFixtures: Record<ConflictType, ConflictsResponse> = {
   teff: conflictsTeff as ConflictsResponse,
 };
 
+/** "TIC 278892590" / "tic-278892590" -> "278892590": identifiers are stored bare, and the API
+    strips the same catalog prefix before matching. */
+export function stripCatalogPrefix(q: string): string {
+  return q.trim().replace(/^(tic|kic|epic|gaia(?:\s+dr\d)?)[\s-]+(?=\d)/i, "");
+}
+
 function mockSearch(q: string): SearchResponse {
-  const query = q.trim().toLowerCase();
+  const query = stripCatalogPrefix(q).toLowerCase();
   if (!query) return { query: q, count: 0, results: [] };
   const hits = searchPool
     .filter(
@@ -152,36 +199,16 @@ export function getAttribution(): Promise<Attribution> {
   return realGet<Attribution>("/attribution");
 }
 
-/* Mock mode has no pipeline output to replay, so it answers the way an unpopulated database does:
-   the real empty state, not invented rows. */
-const EMPTY_LIGHTCURVE_SUMMARY: LightcurveSummary = {
-  state: "empty",
-  targets: 0,
-  processed: 0,
-  not_processed: 0,
-  pending: 0,
-  gold_planets: { targets: 0, recovered: 0, recovered_exact: 0 },
-  gold_false_positives: { targets: 0, with_signal: 0 },
-  discovery: { targets: 0, with_signal: 0 },
-  by_cohort: {} as LightcurveSummary["by_cohort"],
-  last_run_at: null,
-  data_vintage: null,
-  run_attempts: 0,
-  median_runtime_s: null,
-  lightcurve_files: 0,
-  lightcurve_stars: 0,
-  last_fetch_at: null,
-  rules: {
-    period_tolerance: 0.01,
-    snr_min: 7,
-    statement:
-      "A recovery is a BLS or TLS period within 1% of the catalog period, or a harmonic of it, at SNR >= 7.",
-  },
-  verdicts: {},
+/* Mock mode replays a small pipeline output (fixtures/lightcurves.json: twenty graded TOIs across
+   the three cohorts, generated from the mock target map so every row's link resolves), paged and
+   filtered the way the API does it. */
+const lightcurveData = lightcurvesFixture as unknown as {
+  summary: LightcurveSummary;
+  rows: LightcurveResults["rows"];
 };
 
 export function getLightcurveSummary(): Promise<LightcurveSummary> {
-  if (MOCK) return delay(EMPTY_LIGHTCURVE_SUMMARY);
+  if (MOCK) return delay(lightcurveData.summary);
   return realGet<LightcurveSummary>("/lightcurves/summary");
 }
 
@@ -190,7 +217,19 @@ export function getLightcurveResults(
   offset: number,
   cohort: LightcurveCohort | null,
 ): Promise<LightcurveResults> {
-  if (MOCK) return delay({ rows: [], total: 0, limit, offset, sort: "cohort", cohort });
+  if (MOCK) {
+    const all = cohort
+      ? lightcurveData.rows.filter((r) => r.cohort === cohort)
+      : lightcurveData.rows;
+    return delay({
+      rows: all.slice(offset, offset + limit),
+      total: all.length,
+      limit,
+      offset,
+      sort: "cohort",
+      cohort,
+    });
+  }
   const params: Record<string, string | number> = { limit, offset };
   if (cohort) params.cohort = cohort;
   return realGet<LightcurveResults>("/lightcurves/results", params);

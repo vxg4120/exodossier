@@ -9,6 +9,7 @@ target yields an empty, crash-free result) rather than an exact count, since pro
 drift as the element sets age.
 """
 
+import datetime as dt
 import os
 import warnings
 
@@ -39,10 +40,12 @@ oei_required = pytest.mark.skipif(
 
 # UTC instants + target/site where geometry is fully determined by Earth rotation (independent of
 # element-set freshness): GJ 1214 is well up over Kitt Peak; TRAPPIST-1 is below the observability
-# gate at Kitt Peak at 05:00Z. These stay stable regardless of catalog age.
+# gate at Kitt Peak at 05:00Z on 16 July. The same calendar instant in the current year keeps that
+# sky (sidereal time at a fixed date and UTC drifts by minutes a year) and stays inside the
+# service's ten-year start bound as the years pass.
 _GJ1214 = {"ra": 258.831475, "dec": 4.960211}
 _TRAPPIST1 = {"ra": 346.6263919, "dec": -5.0434618}
-_WHEN = "2026-07-16T05:00:00Z"
+_WHEN = f"{dt.date.today().year}-07-16T05:00:00Z"
 
 _PASS_KEYS = {"norad", "name", "operator", "alt_km", "closest_sep_deg", "alt_deg", "time_utc"}
 
@@ -54,6 +57,7 @@ def client(db_conn):
 
 # --------------------------------------------------------------------------- /targets (exo)
 @pytest.mark.db
+@pytest.mark.graph
 def test_targets_shape_and_conflict_flag(client):
     r = client.get("/api/twoskies/targets")
     assert r.status_code == 200

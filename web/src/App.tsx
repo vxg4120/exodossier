@@ -3,10 +3,12 @@ import { NavLink, Route, Routes } from "react-router-dom";
 import { getStats, MOCK } from "./api/client";
 import { useApi } from "./hooks/useApi";
 import { compact, fmtInt } from "./lib/format";
+import { Colophon } from "./components/Colophon";
 import { RouteMeta } from "./components/RouteMeta";
 import { SourceBadge } from "./components/SourceBadge";
 import { Loading } from "./components/States";
 import { maybeAutoStartTour, startTour } from "./lib/tour";
+import { revealFocus } from "./lib/revealFocus";
 
 const Overview = lazy(() => import("./views/Overview").then((m) => ({ default: m.Overview })));
 const Search = lazy(() => import("./views/Search").then((m) => ({ default: m.Search })));
@@ -69,9 +71,8 @@ function Telemetry() {
 }
 
 export default function App() {
-  useEffect(() => {
-    maybeAutoStartTour();
-  }, []);
+  useEffect(() => maybeAutoStartTour(), []);
+  useEffect(() => revealFocus(), []);
 
   return (
     <div className="app">
@@ -142,6 +143,7 @@ export default function App() {
             <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>
+        <Colophon />
       </main>
     </div>
   );

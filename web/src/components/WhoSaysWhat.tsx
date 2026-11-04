@@ -16,6 +16,8 @@ interface SourceClaim {
   numericMax: number | null;
   count: number;
   dispositions: string[];
+  /** The sources' own words when none of them map to a canonical disposition. */
+  rawDispositions: string[];
   ref: string | null;
 }
 
@@ -33,6 +35,11 @@ function summarize(assertions: Assertion[]): SourceClaim[] {
     const dispositions = Array.from(
       new Set(items.map((i) => i.canonical_disposition).filter((d): d is string => Boolean(d))),
     );
+    // a source value outside the seeded mapping reaches the browser with no canonical label;
+    // the source still said something, so its own words show rather than a dash
+    const rawDispositions = Array.from(
+      new Set(items.map((i) => (i.value == null ? "" : String(i.value))).filter(Boolean)),
+    );
     const ref = items.find((i) => i.source_ref)?.source_ref ?? null;
     return {
       source,
@@ -40,6 +47,7 @@ function summarize(assertions: Assertion[]): SourceClaim[] {
       numericMax: nums.length ? Math.max(...nums) : null,
       count: items.length,
       dispositions,
+      rawDispositions,
       ref,
     };
   });
@@ -47,12 +55,21 @@ function summarize(assertions: Assertion[]): SourceClaim[] {
 
 function ClaimValue({ claim, kind }: { claim: SourceClaim; kind: string }) {
   if (kind === "disposition") {
-    if (claim.dispositions.length === 0) return <span className="dash">—</span>;
-    return (
-      <span className="claim__val">
-        {claim.dispositions.map((d) => dispositionMeta(d).label).join(" / ")}
-      </span>
-    );
+    if (claim.dispositions.length > 0) {
+      return (
+        <span className="claim__val">
+          {claim.dispositions.map((d) => dispositionMeta(d).label).join(" / ")}
+        </span>
+      );
+    }
+    if (claim.rawDispositions.length > 0) {
+      return (
+        <span className="claim__val" title="not in the canonical disposition mapping">
+          {claim.rawDispositions.join(" / ")}
+        </span>
+      );
+    }
+    return <span className="dash">—</span>;
   }
   if (claim.numericMin === null) return <span className="dash">—</span>;
   // Compare the rendered figures, not the raw values: two publications 0.05% apart still read as
@@ -76,7 +93,9 @@ function AttributeRow({ group }: { group: AttributeGroup }) {
     <tr className={group.conflict ? "is-conflict" : undefined}>
       <th className="claims__attr" scope="row" title={group.attribute}>
         {attributeLabel(group.attribute)}
-        {group.conflict ? <span className="claims__flag" title="sources disagree" /> : null}
+        {group.conflict ? (
+          <span className="claims__flag" role="img" aria-label="sources disagree" title="sources disagree" />
+        ) : null}
         {unit ? <div className="claims__unit">{unit}</div> : null}
       </th>
       <td>

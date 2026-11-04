@@ -21,6 +21,8 @@ const UNITS: Record<string, string> = {
   R_earth: "R⊕",
   R_sun: "R☉",
   "log10(cm/s^2)": "log10(cm/s²)",
+  // the KV strip and every period column say "(d)"; the claims table says the same
+  days: "d",
 };
 
 export function attributeLabel(attribute: string): string {

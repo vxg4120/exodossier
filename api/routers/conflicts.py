@@ -18,6 +18,9 @@ from api.cache import RefreshingCache
 from api.deps import get_db
 from api.queries import CONFLICT_TYPES, list_conflicts
 
+# Postgres binds a huge int as NUMERIC and rejects it in OFFSET (bigint out of range -> 500).
+MAX_OFFSET = 1_000_000
+
 router = APIRouter(tags=["conflicts"])
 
 FIRST_PAGE_TTL_S = 300.0
@@ -51,11 +54,11 @@ def get_conflicts(
     db: Annotated[psycopg.Connection, Depends(get_db)],
     type: Annotated[str, Query(description="disposition | radius | teff")] = "disposition",
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
-    offset: Annotated[int, Query(ge=0)] = 0,
+    offset: Annotated[int, Query(ge=0, le=MAX_OFFSET)] = 0,
 ):
     if type not in CONFLICT_TYPES:
         raise HTTPException(
-            status_code=400,
+            status_code=422,
             detail=f"unknown conflict type {type!r}; expected one of {list(CONFLICT_TYPES)}",
         )
     if type == "disposition" and offset == 0:

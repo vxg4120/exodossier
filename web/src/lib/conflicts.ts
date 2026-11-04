@@ -38,7 +38,7 @@ export const CONFLICT_TABS: ConflictTab[] = [
   {
     key: "teff",
     tabLabel: "Host Teff",
-    cardLabel: "Host-temperature conflicts",
+    cardLabel: "Host Teff conflicts",
     cardSub: "can flip the habitable zone",
     statsKey: "teff",
     headline:

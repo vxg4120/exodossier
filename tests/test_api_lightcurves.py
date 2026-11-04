@@ -205,7 +205,8 @@ def test_results_pagination_sort_and_links(planted):
 
 @pytest.mark.db
 def test_bad_params_and_404(planted):
-    assert client.get("/api/lightcurves/results", params={"cohort": "nope"}).status_code == 400
+    # one status for bad input, as the Literal-validated sort and limit already answered
+    assert client.get("/api/lightcurves/results", params={"cohort": "nope"}).status_code == 422
     assert client.get("/api/lightcurves/results", params={"sort": "nope"}).status_code == 422
     assert client.get("/api/lightcurves/results", params={"limit": 0}).status_code == 422
     one = client.get(f"/api/lightcurves/target/{planted['miss']}")

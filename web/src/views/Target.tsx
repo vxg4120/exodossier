@@ -56,16 +56,27 @@ function TargetCard({ detail }: { detail: TargetDetail }) {
 
   return (
     <div className="stack">
-      <div className="inline" style={{ justifyContent: "space-between" }}>
-        <Link to="/search" className="hint back-link">
-          ‹ Search
-        </Link>
-        <span className="hint">candidate #{candidate.candidate_id}</span>
-      </div>
+      {/* the chapter head every route opens with (Fraunces narrates); the candidate's name is
+          the dossier's own heading below it, not the page title */}
+      <header className="vhead">
+        <div>
+          <h1 className="vhead__title">Target</h1>
+          <p className="vhead__desc">Every source&rsquo;s claim about one candidate, before resolution.</p>
+        </div>
+        <div className="inline">
+          <Link to="/search" className="hint back-link">
+            ‹ Search
+          </Link>
+          <span className="hint" aria-hidden="true">
+            ·
+          </span>
+          <span className="hint">candidate #{candidate.candidate_id}</span>
+        </div>
+      </header>
 
       <div className={`idhead${nConflict > 0 ? " is-conflict" : ""}`}>
         <div>
-          <h1 className="idhead__name">{candidate.name}</h1>
+          <h2 className="idhead__name">{candidate.name}</h2>
           <div className="idhead__host">
             host <span className="mono-hi">{star.name}</span>
             {star.tic_id ? <span className="muted"> · TIC {star.tic_id}</span> : null}
@@ -83,12 +94,12 @@ function TargetCard({ detail }: { detail: TargetDetail }) {
           </div>
         </div>
         <div className="kv">
-          <KV k="Period (days)" v={fmtNum(candidate.period_days)} />
+          <KV k="Period (d)" v={fmtNum(candidate.period_days)} />
           <KV k="Radius (R⊕)" v={fmtNum(candidate.planet_radius_re)} />
           <KV k="Host Teff (K)" v={fmtNum(star.teff_k)} />
           <KV k="Host R (R☉)" v={fmtNum(star.rstar_rsun)} />
-          <KV k="RA (deg)" v={fmtNum(star.ra_deg)} />
-          <KV k="Dec (deg)" v={fmtNum(star.dec_deg)} />
+          <KV k="RA (deg)" v={star.ra_deg == null ? "—" : star.ra_deg.toFixed(4)} />
+          <KV k="Dec (deg)" v={star.dec_deg == null ? "—" : star.dec_deg.toFixed(4)} />
         </div>
       </div>
 
@@ -107,7 +118,7 @@ function TargetCard({ detail }: { detail: TargetDetail }) {
         title="Who says what"
         meta={
           nConflict > 0
-            ? `${nConflict} attribute${nConflict === 1 ? "" : "s"} disagree across sources`
+            ? `${nConflict} attribute${nConflict === 1 ? " disagrees" : "s disagree"} across sources`
             : "every source's claim, by attribute"
         }
         flush
@@ -120,12 +131,16 @@ function TargetCard({ detail }: { detail: TargetDetail }) {
         </p>
       </Panel>
 
-      <Panel title="Identifier crosswalk" meta={`${detail.identifiers.length} ids · by source`} flush>
+      <Panel
+        title="Identifier crosswalk"
+        meta={`${detail.identifiers.length === 1 ? "1 id" : `${detail.identifiers.length} ids`} · by source`}
+        flush
+      >
         {crosswalk.map(([source, ids]) => (
           <div className="crosswalk-src" key={source}>
             <div className="crosswalk-src__head">
               <SourceBadge source={source} />
-              <span className="hint">{ids.length} ids</span>
+              <span className="hint">{ids.length === 1 ? "1 id" : `${ids.length} ids`}</span>
             </div>
             {ids.map((id, i) => (
               <div className="idpair" key={`${id.id_type}-${id.id_value}-${i}`}>

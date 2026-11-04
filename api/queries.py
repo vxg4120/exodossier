@@ -195,6 +195,27 @@ _TWINS_CTE: dict[str, str] = {
 }
 
 
+_CATALOG_PREFIX = re.compile(r"^(?:tic|kic|epic|gaia(?:\s+dr\d)?)[\s-]+(?=\d)", re.I)
+
+
+def strip_catalog_prefix(q: str) -> str:
+    """"TIC 278892590" / "tic-278892590" -> "278892590": identifiers are stored bare, so the
+    catalog's own prefix would otherwise match nothing (the site's own examples failed)."""
+    return _CATALOG_PREFIX.sub("", q.strip())
+
+
+def like_escape(text: str) -> str:
+    """Escape LIKE metacharacters so "%" or "_" in a search means those characters, not
+    "everything"; the queries use the default backslash escape."""
+    return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def ascii_int(token: str) -> int | None:
+    """The integer a token spells in ASCII digits, or None. str.isdigit() is true for "²" and
+    "①", which int() rejects with a ValueError that surfaced as a 500."""
+    return int(token) if re.fullmatch(r"[0-9]{1,18}", token) else None
+
+
 def _numeric_conflict_cte(attr_level: str) -> str:
     """CTE ``conflicted(eid, mn, mx, spread, n_sources)`` for a numeric attribute.
 
@@ -350,10 +371,11 @@ def search_targets(db: psycopg.Connection, q: str, limit: int = 50) -> list[dict
     its guarded host group, so every result deep-links to a target. Exact matches rank first, then
     prefix, then substring; ties break on name.
     """
-    q = q.strip()
+    q = strip_catalog_prefix(q)
     if not q:
         return []
-    params = {"ex": q, "prefix": q + "%", "like": "%" + q + "%", "limit": limit}
+    esc = like_escape(q)
+    params = {"ex": q, "prefix": esc + "%", "like": "%" + esc + "%", "limit": limit}
     sql = f"""
     WITH host_matches AS (
         SELECT star_id, 2 AS rank FROM star WHERE canonical_name ILIKE %(like)s
@@ -423,8 +445,9 @@ def _resolve_candidate_id(db: psycopg.Connection, ident: str) -> int | None:
     """
     ident = ident.strip()
     with db.cursor() as cur:
-        if ident.isdigit():
-            cur.execute("SELECT candidate_id FROM candidate WHERE candidate_id = %s", (int(ident),))
+        as_id = ascii_int(ident)
+        if as_id is not None:
+            cur.execute("SELECT candidate_id FROM candidate WHERE candidate_id = %s", (as_id,))
             row = cur.fetchone()
             if row:
                 return row["candidate_id"]

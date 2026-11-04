@@ -42,8 +42,23 @@ export function metaForPath(pathname: string): ResolvedMeta {
 }
 
 export function canonicalFor(pattern: string, params: Record<string, string | undefined> = {}): string {
-  const path = generatePath(pattern, params).replace(/\/+$/, "");
+  // matchPath hands back the params as they stand in the pathname (still percent-encoded when
+  // the address bar encoded them) and generatePath inserts them raw; the canonical must carry
+  // each one encoded exactly once, as the server-rendered head does
+  const encoded = Object.fromEntries(
+    Object.entries(params).map(([k, v]) => [k, v === undefined ? v : encodeURIComponent(decodeOnce(v))]),
+  );
+  const path = generatePath(pattern, encoded).replace(/\/+$/, "");
   return path ? `${SITE_ORIGIN}${path}` : `${SITE_ORIGIN}/`;
+}
+
+/** The decoded form of a path segment; a malformed escape (a lone %) is kept as written. */
+function decodeOnce(segment: string): string {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return segment;
+  }
 }
 
 function setMeta(selector: string, attr: string, value: string) {

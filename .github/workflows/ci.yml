@@ -1,0 +1,108 @@
+name: CI
+
+# ExoDossier CI, the same three-job shape as orbital-economy-intelligence.
+#
+#   lint-and-unit  — ruff + the network-free unit tests (no database). Fast gate: a broken import
+#                    or a logic error is caught in seconds, not after a container spins up.
+#   db             — a plain Postgres 16 service container (the exo schema needs no extension),
+#                    migrated from db/migrations, then the full suite. Tests marked `graph`
+#                    assert on the populated catalog and skip on this empty database; everything
+#                    else (schema, planted fixtures, API contracts, the MCP server's own
+#                    error paths) runs for real. No live network pulls ever happen here.
+#   web            — the SPA: pnpm install, the vitest unit tests, then tsc + vite build.
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint-and-unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt -r requirements-api.txt
+
+      - name: Ruff
+        run: ruff check .
+
+      - name: Unit tests (network-free, no database)
+        # DATABASE_URL points at a closed port so a test that reaches the database by mistake
+        # fails here, loudly, instead of passing against a developer's local database.
+        env:
+          DATABASE_URL: postgresql://oei:oei@127.0.0.1:1/exo
+        # pyproject's addopts already carries -q; a second one would hide the final tally line.
+        # -rs names the tests that skipped (the served-shell test needs a built web/dist).
+        run: pytest -W error -rs -m "not db"
+
+  db:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://oei:oei@localhost:5433/exo
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: exo
+          POSTGRES_USER: oei
+          POSTGRES_PASSWORD: oei
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U oei -d exo"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt -r requirements-api.txt -r requirements-ingest.txt
+
+      - name: Migrate schema
+        run: python scripts/migrate.py
+
+      - name: Full test suite (unit + database)
+        run: pytest -W error -rs
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Type-check and build
+        run: pnpm build

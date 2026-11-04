@@ -10,26 +10,17 @@ import warnings
 
 warnings.filterwarnings("ignore", message=r"Using `httpx`")
 
-import psycopg  # noqa: E402
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
 from api.main import app  # noqa: E402
-from common.db import get_conn  # noqa: E402
 
-pytestmark = pytest.mark.filterwarnings(r"ignore:Using `httpx`")
-
-
-def _db_reachable() -> bool:
-    try:
-        get_conn().close()
-        return True
-    except psycopg.OperationalError:
-        return False
-
-
-if not _db_reachable():
-    pytest.skip("exo database not reachable at DATABASE_URL", allow_module_level=True)
+# Every test needs the database; the spot checks on the populated corpus carry the graph mark
+# individually, so the input-validation and static-list contracts still run on an empty graph.
+pytestmark = [
+    pytest.mark.db,
+    pytest.mark.filterwarnings(r"ignore:Using `httpx`"),
+]
 
 client = TestClient(app)
 
@@ -38,6 +29,7 @@ def _conflict_counts() -> dict:
     return client.get("/api/stats").json()["conflicts"]
 
 
+@pytest.mark.graph
 def test_stats_conflict_counts_are_the_list_totals():
     """The headline counts and the corpus they link to are the same query, so they agree — on
     whatever graph the nightly rebuild produced (the numbers drift as the catalogs refresh)."""
@@ -48,6 +40,7 @@ def test_stats_conflict_counts_are_the_list_totals():
     assert 0 < counts["disposition_dramatic"] <= counts["disposition"]
 
 
+@pytest.mark.graph
 def test_disposition_list_puts_dramatic_first():
     counts = _conflict_counts()
     n_dramatic = counts["disposition_dramatic"]
@@ -62,6 +55,7 @@ def test_disposition_list_puts_dramatic_first():
     assert {"Kepler-1517 b", "Kepler-404 b", "TOI-1836 c"} <= dramatic
 
 
+@pytest.mark.graph
 def test_known_disposition_conflict_fp_vs_confirmed():
     """Kepler-1517 b: one catalog says FALSE_POSITIVE, another CONFIRMED — the headline case."""
     t = client.get("/api/target/Kepler-1517 b").json()
@@ -75,6 +69,7 @@ def test_known_disposition_conflict_fp_vs_confirmed():
     assert canon.get("koi") == "CONFIRMED"
 
 
+@pytest.mark.graph
 def test_trappist1_shows_teff_conflict():
     """TRAPPIST-1: TOI catalogs list the solar-default 5780 K, ps/pscomppars ~2560 K."""
     t = client.get("/api/target/TRAPPIST-1 b").json()
@@ -87,6 +82,7 @@ def test_trappist1_shows_teff_conflict():
     assert "teff_k" in t["conflict_attributes"]
 
 
+@pytest.mark.graph
 def test_teff_conflict_list_includes_trappist1_and_links_to_target():
     r = client.get("/api/conflicts", params={"type": "teff", "limit": 50})
     assert r.status_code == 200
@@ -100,6 +96,7 @@ def test_teff_conflict_list_includes_trappist1_and_links_to_target():
     assert any(bs["source"] == "ps" for bs in trappist["by_source"])
 
 
+@pytest.mark.graph
 def test_radius_list_sorted_by_spread_desc_with_provenance():
     r = client.get("/api/conflicts", params={"type": "radius", "limit": 10})
     body = r.json()
@@ -111,6 +108,7 @@ def test_radius_list_sorted_by_spread_desc_with_provenance():
     assert first["by_source"]  # per-source ranges present
 
 
+@pytest.mark.graph
 def test_conflicts_pagination():
     p1 = client.get("/api/conflicts", params={"type": "radius", "limit": 5, "offset": 0}).json()
     p2 = client.get("/api/conflicts", params={"type": "radius", "limit": 5, "offset": 5}).json()
@@ -120,9 +118,9 @@ def test_conflicts_pagination():
     assert ids1.isdisjoint(ids2)  # no overlap across pages
 
 
-def test_bad_conflict_type_is_400():
+def test_bad_conflict_type_is_422():
     r = client.get("/api/conflicts", params={"type": "banana"})
-    assert r.status_code == 400
+    assert r.status_code == 422
 
 
 def test_conflict_types_endpoint():

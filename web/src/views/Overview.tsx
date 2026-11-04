@@ -83,14 +83,20 @@ export function Overview() {
             <div className="grid grid--2">
               <DisagreePanel s={cat} />
               <Panel
-                title={`The dramatic ${fmtInt(cat.conflicts.disposition_dramatic)}`}
+                title={
+                  cat.conflicts.disposition_dramatic === 0
+                    ? "No dramatic cases"
+                    : `The dramatic ${fmtInt(cat.conflicts.disposition_dramatic)}`
+                }
                 meta="FALSE POSITIVE vs CONFIRMED"
                 dataTour="dramatic"
               >
                 <p className="story__headline">
-                  {cat.conflicts.disposition_dramatic === 1
-                    ? "One candidate is confirmed by one catalog and called a false positive by another."
-                    : `${fmtInt(cat.conflicts.disposition_dramatic)} candidates are confirmed by one catalog and called false positives by another.`}
+                  {cat.conflicts.disposition_dramatic === 0
+                    ? "No candidate is confirmed by one catalog and called a false positive by another right now."
+                    : cat.conflicts.disposition_dramatic === 1
+                      ? "One candidate is confirmed by one catalog and called a false positive by another."
+                      : `${fmtInt(cat.conflicts.disposition_dramatic)} candidates are confirmed by one catalog and called false positives by another.`}
                 </p>
                 <Async state={dramatic} loadingLabel="Loading the dramatic cases" loadingRows={3}>
                   {(page) => (
@@ -169,6 +175,26 @@ function StoryPanels({ s }: { s: Stories }) {
   const base = c.baseline_date;
   const last = c.series[c.series.length - 1];
 
+  // The documented empty payload (a cold start with no retained snapshot) has no series: the
+  // tiles would read "0 confirmed planets", which is false, so they wait like the panels do —
+  // all four of them, so the row keeps its shape instead of one tile in four columns.
+  if (!last) {
+    return (
+      <div className="grid grid--stats" data-tour="stats">
+        <StatTile
+          lead
+          hero
+          label="Confirmed planets"
+          value="—"
+          sub="waiting for the first archive snapshot"
+        />
+        <StatTile label="Awaiting a verdict" value="—" sub="TESS candidates (PC or APC) on ExoFOP's list" />
+        <StatTile label="Confirmed by follow-up" value="—" sub="TESS candidates moved to CP" />
+        <StatTile label="Ruled out" value="—" sub="TESS candidates moved to FP or FA" />
+      </div>
+    );
+  }
+
   return (
     <>
       <div className="grid grid--stats" data-tour="stats">
@@ -176,7 +202,7 @@ function StoryPanels({ s }: { s: Stories }) {
           lead
           hero
           label="Confirmed planets"
-          value={last ? last.count : 0}
+          value={last.count}
           sub={
             hasConfirmedChange && base ? (
               <>
@@ -501,7 +527,7 @@ function VerdictsPanel({ s }: { s: Stories }) {
   const rows: BarRow[] = shown.map((t) => ({
     key: `${t.from}>${t.to}`,
     label: (
-      <span className="story-move" aria-label={`${tfopwgMeta(t.from).label} to ${tfopwgMeta(t.to).label}`}>
+      <span className="story-move" role="group" aria-label={`${tfopwgMeta(t.from).label} to ${tfopwgMeta(t.to).label}`}>
         <TfopwgBadge code={t.from} />
         <span className="story-move__arrow" aria-hidden="true">
           →
@@ -568,7 +594,7 @@ function VerdictsPanel({ s }: { s: Stories }) {
                 <Link to={targetHref(d.toi)} className="mono-hi">
                   TOI-{d.toi}
                 </Link>
-                <span className="story-move" aria-label={`${tfopwgMeta(d.from).label} to ${tfopwgMeta(d.to).label}`}>
+                <span className="story-move" role="group" aria-label={`${tfopwgMeta(d.from).label} to ${tfopwgMeta(d.to).label}`}>
                   <TfopwgBadge code={d.from} />
                   <span className="story-move__arrow" aria-hidden="true">
                     →

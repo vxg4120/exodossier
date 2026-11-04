@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import type { CongestionBin } from "../api/twoskies";
+import { useWidth } from "../hooks/useWidth";
 import { fmtInt } from "../lib/format";
 
 /* Sequential blue ramp. Near-zero recedes to the surface; density climbs light→bright. Buckets are
@@ -21,6 +22,7 @@ interface HoverCell {
 interface Props {
   bins: CongestionBin[];
   maxAltKm?: number;
+  /** Cell width when the panel has room; a narrower panel shrinks the cells (never under 6px). */
   cellW?: number;
   cellH?: number;
 }
@@ -31,7 +33,7 @@ function bucket(count: number, max: number): number {
   return Math.min(RAMP.length - 1, Math.max(0, Math.ceil(t * RAMP.length) - 1));
 }
 
-export function CongestionHeatmap({ bins, maxAltKm = 2000, cellW = 13, cellH = 9 }: Props) {
+export function CongestionHeatmap({ bins, maxAltKm = 2000, cellW: maxCellW = 13, cellH = 9 }: Props) {
   const [hover, setHover] = useState<HoverCell | null>(null);
 
   const { lookup, maxCount } = useMemo(() => {
@@ -51,10 +53,17 @@ export function CongestionHeatmap({ bins, maxAltKm = 2000, cellW = 13, cellH = 9
   const mT = 6;
   const mB = 36;
   const mR = 8;
+  // sized from the panel, as the story charts are, so a phone column holds the whole axis
+  // instead of hiding a third of it behind an undiscoverable drag: the designed cell width is
+  // the ceiling, 6px the floor, and a plot that still overflows marks its scroller for the
+  // edge fade (theme.css .heatmap__plot.is-scroll)
+  const [plotRef, W] = useWidth<HTMLDivElement>(mL + cols * maxCellW + mR);
+  const cellW = Math.max(6, Math.min(maxCellW, Math.floor((W - mL - mR) / cols)));
   const plotW = cols * cellW;
   const plotH = rows * cellH;
   const w = mL + plotW + mR;
   const h = mT + plotH + mB;
+  const scrolls = w > W;
 
   const xTicks = [0, 30, 60, 90, 120, 150, 180];
   const yTicks: number[] = [];
@@ -94,7 +103,7 @@ export function CongestionHeatmap({ bins, maxAltKm = 2000, cellW = 13, cellH = 9
 
   return (
     <div className="heatmap">
-      <div className="heatmap__plot">
+      <div className={`heatmap__plot${scrolls ? " is-scroll" : ""}`} ref={plotRef}>
         <svg className="hm-svg" width={w} height={h} role="img" aria-label="Orbital congestion by altitude and inclination">
           {/* y ticks + labels */}
           {yTicks.map((a) => {
@@ -136,7 +145,7 @@ export function CongestionHeatmap({ bins, maxAltKm = 2000, cellW = 13, cellH = 9
 
       <div className="hm-foot">
         <span className="hint">
-          LEO focus · {fmtInt(bins.length)} occupied bins · {ALT_STEP} km × {INC_STEP}° · peak{" "}
+          LEO focus · {fmtInt(lookup.size)} occupied bins · {ALT_STEP} km × {INC_STEP}° · peak{" "}
           <span className="num">{fmtInt(maxCount)}</span> objects
         </span>
         <div className="hm-legend">

@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { getLightcurveResults, getLightcurveSummary } from "../api/client";
 import type {
   LightcurveCohort,
@@ -10,7 +10,7 @@ import type {
 import { useApi } from "../hooks/useApi";
 import { fmtDate, fmtInt, fmtNum } from "../lib/format";
 import { Panel } from "../components/Panel";
-import { Cell, DataTable, Pager, type Column } from "../components/DataTable";
+import { Cell, DataTable, Pager, pastTheEnd, type Column } from "../components/DataTable";
 import { StatTile } from "../components/StatTile";
 import { Async, EmptyState } from "../components/States";
 
@@ -33,19 +33,20 @@ function toCohort(v: string | null): LightcurveCohort | null {
   return v === "gold_planet" || v === "gold_fp" || v === "discovery" ? v : null;
 }
 
-/** Verdict -> the existing badge tones, so no new colours: a match reads as confirmed, a
-    harmonic or off-period signal as known, a non-result as unknown, a failed run as a conflict. */
+/** Verdict -> the badge's own verdict family (a square glyph), never the disposition scale or
+    the conflict amber, which mean planet status and cross-source disagreement elsewhere: a match
+    is found, a harmonic or off-period signal partial, a non-result neutral, a failed run failed. */
 const VERDICT_TONE: Record<string, string> = {
-  recovered: "badge--disp disp-confirmed",
-  signal_at_catalog_period: "badge--disp disp-confirmed",
-  recovered_harmonic: "badge--disp disp-known",
-  signal: "badge--disp disp-known",
-  missed: "badge--disp disp-unknown",
-  no_signal: "badge--disp disp-unknown",
-  below_threshold: "badge--disp disp-unknown",
-  pending: "badge--disp disp-unknown",
-  running: "badge--disp disp-unknown",
-  not_processed: "badge--conflict",
+  recovered: "badge--verdict is-found",
+  signal_at_catalog_period: "badge--verdict is-found",
+  recovered_harmonic: "badge--verdict is-partial",
+  signal: "badge--verdict is-partial",
+  missed: "badge--verdict",
+  no_signal: "badge--verdict",
+  below_threshold: "badge--verdict",
+  pending: "badge--verdict",
+  running: "badge--verdict",
+  not_processed: "badge--verdict is-failed",
 };
 
 const VERDICT_SHORT: Record<string, string> = {
@@ -63,7 +64,7 @@ const VERDICT_SHORT: Record<string, string> = {
 
 function VerdictBadge({ verdict, title }: { verdict: string; title?: string }) {
   return (
-    <span className={`badge ${VERDICT_TONE[verdict] ?? "badge--disp disp-unknown"}`} title={title}>
+    <span className={`badge ${VERDICT_TONE[verdict] ?? "badge--verdict"}`} title={title}>
       <span className="badge__glyph" aria-hidden="true" />
       {VERDICT_SHORT[verdict] ?? verdict}
     </span>
@@ -74,16 +75,18 @@ export function Lightcurves() {
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
   const cohort = toCohort(params.get("cohort"));
-  const [offset, setOffset] = useState(0);
-
-  useEffect(() => {
-    setOffset(0);
-  }, [cohort]);
+  // One page offset per cohort tab, so a tab change never first asks for the old page.
+  const [offsets, setOffsets] = useState<Record<string, number>>({});
+  const offset = offsets[cohort ?? "all"] ?? 0;
+  const setOffset = (next: number) => setOffsets((o) => ({ ...o, [cohort ?? "all"]: next }));
 
   const summary = useApi<LightcurveSummary>(() => getLightcurveSummary(), []);
+  // keep: the rows stay on screen, dimmed, while the next page loads, so the pager keeps focus;
+  // keyed by the cohort, so a tab change shows the loader, not the old slice's rows under the new
   const page = useApi<LightcurveResults>(
     () => getLightcurveResults(LIMIT, offset, cohort),
     [cohort, offset],
+    { keep: true, keepKey: cohort },
   );
   // A TOI the current graph no longer resolves has no target page to open (see isLinkable below).
   const open = (r: LightcurveRow) => navigate(`/target/${r.candidate_id}`);
@@ -116,7 +119,9 @@ export function Lightcurves() {
             return (
               <button
                 key={t.label}
+                type="button"
                 className={`tab${cohort === t.key ? " is-active" : ""}`}
+                aria-pressed={cohort === t.key}
                 onClick={() => setParams(t.key ? { cohort: t.key } : {})}
               >
                 {t.label}
@@ -135,7 +140,12 @@ export function Lightcurves() {
 
         <Async state={page} loadingLabel="Loading results" loadingRows={10}>
           {(data) =>
-            data.total === 0 ? (
+            data.total === 0 && cohort && summary.data?.state === "ready" ? (
+              <EmptyState
+                title="No targets in this slice"
+                message="The pipeline has results, but none of its targets fall in this slice."
+              />
+            ) : data.total === 0 ? (
               <EmptyState
                 title="No pipeline results on this server yet"
                 message={
@@ -150,14 +160,29 @@ export function Lightcurves() {
               />
             ) : (
               <>
-                <DataTable<LightcurveRow>
-                  columns={COLUMNS}
-                  rows={data.rows}
-                  rowKey={(r) => r.target_id}
-                  onRowClick={open}
-                  isLinkable={(r) => r.candidate_id !== null}
+                {pastTheEnd(data.rows.length, data.total) ? (
+                  // a page past the end: the list shrank since it was counted
+                  <EmptyState
+                    title="Nothing on this page"
+                    message="The list changed since it was counted. Go back a page."
+                  />
+                ) : (
+                  <DataTable<LightcurveRow>
+                    columns={COLUMNS}
+                    rows={data.rows}
+                    rowKey={(r) => r.target_id}
+                    onRowClick={open}
+                    isLinkable={(r) => r.candidate_id !== null}
+                    stickyFirst
+                  />
+                )}
+                <Pager
+                  offset={offset}
+                  limit={LIMIT}
+                  total={data.total}
+                  shown={page.loading ? undefined : data.rows.length}
+                  onOffset={setOffset}
                 />
-                <Pager offset={offset} limit={LIMIT} total={data.total} onOffset={setOffset} />
               </>
             )
           }
@@ -228,10 +253,16 @@ function SummaryStrip({ s }: { s: LightcurveSummary }) {
 const COLUMNS: Column<LightcurveRow>[] = [
   {
     key: "target",
-    header: "Candidate",
+    header: "Target",
     render: (r) => (
       <span>
-        <span className="mono-hi">{r.name}</span>
+        {r.candidate_id !== null ? (
+          <Link to={`/target/${r.candidate_id}`} className="mono-hi" onClick={(e) => e.stopPropagation()}>
+            {r.name}
+          </Link>
+        ) : (
+          <span className="mono-hi">{r.name}</span>
+        )}
         {r.toi && !r.name.includes(r.toi) ? <span className="hint"> TOI-{r.toi}</span> : null}
       </span>
     ),

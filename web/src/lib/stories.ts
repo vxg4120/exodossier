@@ -65,8 +65,9 @@ export function fmtDay(iso: string | null | undefined, withYear = false): string
 }
 
 /** "2026-07-15" -> "Jul 15" for tight labels. */
-export function fmtDayShort(iso: string): string {
-  const [, m, d] = iso.slice(0, 10).split("-").map(Number);
+export function fmtDayShort(iso: string | null | undefined): string {
+  const [, m, d] = (iso ?? "").slice(0, 10).split("-").map(Number);
+  if (!MONTHS[m - 1] || !d) return "—";
   return `${MONTHS[m - 1].slice(0, 3)}\u00a0${d}`;
 }
 

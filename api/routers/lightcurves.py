@@ -9,7 +9,7 @@ slice. It writes ``target``, ``pipeline_run`` and ``detection``. This router onl
 
 Every row is graded with the SAME rules as the committed recovery report
 (``quality/recovery_report.py``): a recovery is a BLS/TLS period within 1% of the catalog period
-or one of its harmonics at SNR >= 7. The grading is a measurement against the TFOPWG answer key;
+or one of its harmonics at SNR ≥ 7. The grading is a measurement against the TFOPWG answer key;
 nothing here confirms or rejects a planet.
 
 The slice is small (tens of targets, a few detections each), so both endpoints read the latest
@@ -56,7 +56,7 @@ COHORTS: dict[str, dict[str, str]] = {
     },
     "discovery": {
         "label": "Discovery slice",
-        "description": "Long-period (P >= 30 d) and single-transit planet candidates, the periodic "
+        "description": "Long-period (P ≥ 30 d) and single-transit planet candidates, the periodic "
         "search's blind spot. A signal here is worth a closer look, not a planet.",
     },
 }
@@ -312,7 +312,7 @@ def lightcurve_summary(db: psycopg.Connection) -> dict[str, Any]:
             "snr_min": SNR_MIN,
             "statement": (
                 f"A recovery is a BLS or TLS period within {PERIOD_TOL:.0%} of the catalog "
-                f"period, or a harmonic of it, at SNR >= {SNR_MIN:g}."
+                f"period, or a harmonic of it, at SNR ≥ {SNR_MIN:g}."
             ),
         },
         "verdicts": VERDICTS,
@@ -341,14 +341,14 @@ def get_summary(db: Annotated[psycopg.Connection, Depends(get_db)]):
 def get_results(
     db: Annotated[psycopg.Connection, Depends(get_db)],
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
-    offset: Annotated[int, Query(ge=0)] = 0,
+    offset: Annotated[int, Query(ge=0, le=1_000_000)] = 0,
     sort: Annotated[Literal["cohort", "toi", "snr", "period"], Query()] = "cohort",
     cohort: Annotated[str | None, Query(description="gold_planet | gold_fp | discovery")] = None,
 ):
     """One graded row per selected target, each deep-linking to /target/{candidate_id}."""
     if cohort is not None and cohort not in COHORTS:
         raise HTTPException(
-            status_code=400,
+            status_code=422,
             detail=f"unknown cohort {cohort!r}; expected one of {list(COHORTS)}",
         )
     rows = _sort_rows(_load(db, cohort), sort)

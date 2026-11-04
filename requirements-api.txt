@@ -16,8 +16,9 @@ sgp4
 # aarch64 wheels, so no libpq/build tools are required in the image.
 psycopg[binary]
 
-# MCP server (mcp/server.py). Pinned: mcp >= 1.15 pulls pyjwt[crypto] -> cryptography, whose
-# current sdist fails to build on Python 3.14 (no compatible wheel; Rust manifest parse error).
-# 1.14.1 is the newest release whose dependency set is wheels-only on 3.14 and still ships the
-# modern low-level Server API used by mcp/server.py.
-mcp==1.14.1
+# MCP server (mcp/server.py). Bounded below 2.0: the 2.x SDK renames FastMCP to MCPServer and
+# changes the tool API, so mcp/server.py would not import. The old exact pin to 1.14.1 broke on
+# 2026-11-04 the other way round: 1.14.1 reached into pydantic's private _typing_extra, which
+# pydantic 2.14 no longer exports, so `import mcp` failed wherever the current fastapi/pydantic
+# were installed beside it. cryptography (pulled in by 1.15+) ships wheels for 3.13 and 3.14 now.
+mcp>=1.30,<2

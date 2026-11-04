@@ -5,6 +5,7 @@ The unit tests run on a small inline shell and need no build. The TestClient tes
 ``web/dist/index.html`` and are skipped without it. No database is involved.
 """
 
+import html
 import pathlib
 import re
 import warnings
@@ -13,7 +14,7 @@ warnings.filterwarnings("ignore", message=r"Using `httpx`")
 
 import pytest  # noqa: E402
 
-from api.seo import match, render_head  # noqa: E402
+from api.seo import load_routes, match, render_head  # noqa: E402
 
 pytestmark = pytest.mark.filterwarnings(r"ignore:Using `httpx`")
 
@@ -52,7 +53,10 @@ def test_root():
     assert _attr(out, 'rel="canonical"', "href") == "https://exo.vibcreates.com/"
     assert _attr(out, 'property="og:url"', "content") == "https://exo.vibcreates.com/"
     assert 'name="robots"' not in out
-    assert _attr(out, 'name="description"', "content").startswith("A read-only catalog")
+    # the landing is a story page: its own description from the route table, not the site's line
+    desc = html.unescape(_attr(out, 'name="description"', "content"))
+    assert desc == match("/")["description"]
+    assert desc != load_routes()["site"]["description"]
 
 
 def test_target_keeps_param_case_and_sets_title():
@@ -133,6 +137,11 @@ def test_served_shell_heads():
     r = client.get("/")
     assert r.status_code == 200
     assert _title(r.text) == "ExoDossier · Exoplanet Conflict Explorer"
+    # the root is rendered like any route (not the dist file verbatim): the table's description
+    # and no-cache, so a stale shell is never kept past a deploy
+    served = html.unescape(_attr(r.text, 'name="description"', "content"))
+    assert served == match("/")["description"]
+    assert r.headers.get("cache-control") == "no-cache"
 
     # Unknown API paths keep their JSON 404 rather than the shell.
     r = client.get("/api/nope")

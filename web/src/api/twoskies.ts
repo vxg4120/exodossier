@@ -1,9 +1,14 @@
 /* =============================================================================
-   Follow-up bridge API. Live-only: the /passes forecaster SGP4-propagates the satellite LEO
-   catalog server-side, so there is no mock fixture — the view calls the real ExoDossier FastAPI
-   service under /api/twoskies (same-origin in the built SPA, dev-proxied to :8700). Kept separate
-   from the main client so the shared client/types stay untouched.
+   Follow-up bridge API. The view calls the ExoDossier FastAPI service under /api/twoskies
+   (same-origin in the built SPA, dev-proxied to :8700). Kept separate from the main client so the
+   shared client/types stay untouched. In mock mode (VITE_API_MOCK=1) the answers come from
+   fixtures/twoskies.json: the target list and the congestion field are shaped like the live ones,
+   and /passes is one canned Kitt Peak forecast for every query, because the forecaster SGP4-
+   propagates the satellite catalog server-side and the mock cannot.
    ============================================================================= */
+
+import { delay, fetchJson, MOCK } from "./client";
+import twoskiesFixture from "./fixtures/twoskies.json";
 
 const BASE = "/api/twoskies";
 
@@ -94,25 +99,22 @@ async function get<T>(path: string, params?: Record<string, string | number>): P
   const qs = params
     ? "?" + new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)])).toString()
     : "";
-  const res = await fetch(`${BASE}${path}${qs}`, { headers: { accept: "application/json" } });
-  if (!res.ok) {
-    let detail = `${res.status} ${res.statusText}`;
-    try {
-      const j = (await res.json()) as { detail?: string };
-      if (j?.detail) detail = j.detail;
-    } catch {
-      /* non-JSON error body — keep the status line */
-    }
-    throw new Error(detail);
-  }
-  return (await res.json()) as T;
+  return fetchJson<T>(`${BASE}${path}${qs}`, `/twoskies${path}`);
 }
 
+const fixture = twoskiesFixture as unknown as {
+  targets: TargetsResponse;
+  congestion: CongestionAstronomy;
+  passes: PassesResponse;
+};
+
 export function getTargets(): Promise<TargetsResponse> {
+  if (MOCK) return delay(fixture.targets);
   return get<TargetsResponse>("/targets");
 }
 
 export function getCongestionAstronomy(): Promise<CongestionAstronomy> {
+  if (MOCK) return delay(fixture.congestion);
   return get<CongestionAstronomy>("/congestion-astronomy");
 }
 
@@ -127,6 +129,18 @@ export interface PassQuery {
 }
 
 export function getPasses(q: PassQuery): Promise<PassesResponse> {
+  if (MOCK) {
+    // the canned forecast, re-labelled with the query's target, site and window
+    const site = SITES.find((s) => s.key === q.site);
+    return delay({
+      ...fixture.passes,
+      target: { ra_deg: q.ra, dec_deg: q.dec },
+      site: site ? { ...fixture.passes.site, key: site.key, name: site.name } : fixture.passes.site,
+      window: { ...fixture.passes.window, window_min: q.window_min ?? fixture.passes.window.window_min },
+      sep_deg: q.sep_deg ?? fixture.passes.sep_deg,
+      min_alt_deg: q.min_alt_deg ?? fixture.passes.min_alt_deg,
+    });
+  }
   const params: Record<string, string | number> = { ra: q.ra, dec: q.dec };
   if (q.datetime) params.datetime = q.datetime;
   if (q.site) params.site = q.site;

@@ -63,7 +63,9 @@
   --fs-hero: 42px;
 
   /* ---- geometry ---- */
-  --rail-w: 210px;
+  /* wide enough for the brand's sub-line ("Conflict Explorer · Read-only") on one line at
+     --fs-micro; at 210px it ran 26px past the brand column's border. Same width as orbital. */
+  --rail-w: 244px;
   --topbar-h: 46px;
   --pad: 20px;
 
@@ -114,6 +116,14 @@ a:hover {
 :focus-visible {
   outline: 1.5px solid var(--signal);
   outline-offset: 1px;
+}
+/* inside a horizontal scroller (the tab strips, the phone rail, a table wrap) a ring drawn
+   outside the box is clipped to two side ticks, so there it is drawn inside the box */
+.tabs .tab:focus-visible,
+.rail .navlink:focus-visible,
+.results .result-row:focus-visible,
+.table-wrap tr:focus-visible {
+  outline-offset: -2px;
 }
 ::selection {
   background: var(--signal-wash);
@@ -351,6 +361,7 @@ button {
   font-weight: 600;
   font-variation-settings: "SOFT" 0, "WONK" 1;
   letter-spacing: 0.005em;
+  line-height: 1.15;
   color: var(--ink);
   margin: 0;
 }
@@ -358,7 +369,8 @@ button {
   font-size: var(--fs-sm);
   color: var(--ink-dim);
   margin: 4px 0 0;
-  max-width: 74ch;
+  /* the measure shared with orbital */
+  max-width: 72ch;
 }
 
 /* =============================================================================
@@ -370,9 +382,13 @@ button {
 }
 .panel__head {
   display: flex;
-  align-items: center;
+  /* title and meta share a baseline on one row; a pair that does not fit (a tablet column)
+     wraps to a one-line title over a right-aligned meta instead of both breaking mid-phrase */
+  flex-wrap: wrap;
+  align-items: baseline;
   justify-content: space-between;
   gap: 12px;
+  row-gap: 2px;
   padding: 10px 14px;
   border-bottom: 1px solid var(--rule);
 }
@@ -388,6 +404,8 @@ button {
   color: var(--ink);
 }
 .panel__meta {
+  margin-left: auto;
+  text-align: right;
   font-size: var(--fs-micro);
   letter-spacing: 0.05em;
   color: var(--ink-faint);
@@ -398,6 +416,14 @@ button {
 }
 .panel__body--flush {
   padding: 0;
+}
+/* the closing note under a chart or a table — a hint ending the body, or following the shell
+   bars, the forecaster form or a table wrap — keeps one distance, the same as .story__how */
+.panel__body > .hint:last-child,
+.ts-shells + .hint,
+.ts-form + .hint,
+.table-wrap + .hint {
+  margin-top: 12px;
 }
 .grid {
   display: grid;
@@ -418,9 +444,6 @@ button {
 }
 .grid--3 {
   grid-template-columns: repeat(3, 1fr);
-}
-.span-2 {
-  grid-column: span 2;
 }
 .stack {
   display: flex;
@@ -479,6 +502,8 @@ button {
   color: var(--conflict);
 }
 .stat__sub {
+  /* anchored to the tile's bottom, so a row's subs share a height whatever the numerals wrap */
+  margin-top: auto;
   font-size: var(--fs-xs);
   color: var(--ink-dim);
 }
@@ -564,6 +589,25 @@ button {
   transform: rotate(45deg);
   width: 5px;
   height: 5px;
+}
+
+/* light-curve verdict variants: a square glyph, a different family by shape, so a pipeline
+   result never borrows the disposition scale (a round green dot means "confirmed by the
+   archive" one route earlier) or the conflict amber */
+.badge--verdict .badge__glyph {
+  background: var(--ink-faint);
+  border-radius: 1px;
+}
+.badge--verdict.is-found .badge__glyph {
+  background: var(--ok);
+}
+.badge--verdict.is-partial .badge__glyph {
+  background: var(--ok);
+  opacity: 0.55;
+}
+.badge--verdict.is-failed {
+  color: var(--err);
+  border-color: color-mix(in srgb, var(--err) 40%, var(--rule));
 }
 
 /* source badge: low-chroma identity tint, left tick */
@@ -691,13 +735,29 @@ button {
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
-.btn:hover:not(:disabled) {
+.btn:hover:not(:disabled):not([aria-disabled="true"]) {
   color: var(--ink);
   border-color: var(--signal-dim);
 }
-.btn:disabled {
-  opacity: 0.4;
+.btn:disabled,
+.btn[aria-disabled="true"] {
+  /* inert, not faded: at opacity .4 the "Prev" on page one fell to ~2.1:1; faint ink on the
+     bare surface reads at 5.3:1 and the --rule border still says it does nothing. The pager's
+     end buttons go inert with aria-disabled (DataTable): a control disabled under the keyboard
+     focus drops it to the body */
+  opacity: 1;
+  color: var(--ink-faint);
+  border-color: var(--rule);
+  background: transparent;
   cursor: not-allowed;
+}
+.btn[aria-busy="true"] {
+  /* in flight: the control stays enabled (disabling it would drop keyboard focus) and the
+     handler ignores the repeat press; full ink under the fade, so a plain button's dim ink
+     does not drop to 3.3:1 */
+  opacity: 0.6;
+  cursor: progress;
+  color: var(--ink);
 }
 
 /* ingest ledger run state */
@@ -749,10 +809,16 @@ button {
   background: var(--surface-2);
 }
 .conflict-row__count {
+  /* a hero count, so it speaks Fraunces like the stat tiles (the Overview sets the same
+     figure in a tile 400px away); the amber stays */
+  font-family: var(--font-display);
   font-size: var(--fs-xl);
+  font-weight: 580;
+  font-variation-settings: "SOFT" 0, "WONK" 0;
+  font-variant-numeric: lining-nums tabular-nums;
+  line-height: 1.05;
   color: var(--conflict);
   text-align: right;
-  font-weight: 600;
 }
 .conflict-row__body {
   display: flex;
@@ -832,6 +898,11 @@ button {
   padding-right: max(14px, calc(100% - 80ch));
 }
 .wrap-cell {
+  /* the light-curve note wraps, but never under ~28 characters a line: squeezed to its longest
+     word by a narrow table it ran to 4–7 lines (132px rows) in a column already scrolled off the
+     screen, so the rows were tall for a reason the visitor could not see */
+  display: inline-block;
+  min-width: 28ch;
   white-space: normal;
   color: var(--ink-dim);
 }
@@ -847,8 +918,11 @@ button {
   background: var(--surface);
   padding: 0 12px;
 }
-.searchbar:focus-within {
+.searchbar:has(input:focus-visible) {
   border-color: var(--signal-dim);
+  /* the ring the input gives up (below) is drawn around the whole bar, for the input only */
+  outline: 1.5px solid var(--signal);
+  outline-offset: 1px;
 }
 .searchbar__prompt {
   color: var(--signal);
@@ -862,6 +936,8 @@ button {
   font: inherit;
   font-size: var(--fs-md);
   padding: 12px 0;
+}
+.searchbar input:focus-visible {
   outline: none;
 }
 .searchbar input::placeholder {
@@ -954,6 +1030,7 @@ button {
 }
 .idhead__name {
   font-size: var(--fs-lg);
+  line-height: 1.15;
   color: var(--ink);
   font-weight: 600;
   margin: 0 0 8px;
@@ -971,7 +1048,7 @@ button {
 }
 .kv {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 10px 22px;
 }
 .kv__item {
@@ -1089,7 +1166,7 @@ button {
 }
 .claims__unit {
   color: var(--ink-faint);
-  font-size: var(--fs-micro);
+  font-size: var(--fs-xs);
   /* units keep their case (K, R⊕, days, BJD) under the uppercase attribute name */
   text-transform: none;
   letter-spacing: 0;
@@ -1122,7 +1199,7 @@ button {
   letter-spacing: 0.03em;
 }
 .claim__ref {
-  font-size: var(--fs-micro);
+  font-size: var(--fs-xs);
   color: var(--ink-faint);
   font-style: italic;
   max-width: 60ch;
@@ -1217,6 +1294,16 @@ button {
 }
 .state--error .state__title {
   color: var(--err);
+}
+/* a list fetching its next page keeps its table and pager mounted, dimmed (useApi's `keep`,
+   via Async), so the button that asked keeps focus and the scroll position holds */
+.reloading {
+  opacity: 0.55;
+  transition: opacity 0.15s;
+}
+.reloading .dtable,
+.reloading .pager {
+  pointer-events: none;
 }
 /* loading skeleton: hairline-toned bars with a slow shimmer; the global
    prefers-reduced-motion rule stops the animation */
@@ -1322,22 +1409,25 @@ button {
   color: var(--ink-dim);
   line-height: 1.7;
 }
-.prose h2 {
-  font-family: var(--font-display);
-  font-size: var(--fs-md);
-  font-weight: 560;
-  font-variation-settings: "SOFT" 0, "WONK" 0;
-  color: var(--ink);
-  letter-spacing: 0.005em;
+/* sub-heads: an h3 one level under the panel's Fraunces title, in the uppercase micro voice
+   both apps use there (the browser's bold 15px mono default outweighed the title above it) */
+.prose h3 {
   margin: 22px 0 8px;
+  font-size: var(--fs-xs);
+  font-weight: 400;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
 }
-.prose h2:first-child {
+.prose h3:first-child {
   margin-top: 0;
 }
 .prose p {
   margin: 0 0 12px;
 }
 .prose code {
+  /* the UA's generic monospace, not the app's mono stack the paragraph is set in */
+  font-family: var(--font-mono);
   background: var(--surface-2);
   border: 1px solid var(--rule);
   padding: 0 4px;
@@ -1371,6 +1461,24 @@ button {
 /* =============================================================================
    Responsive — collapse rail under the top bar on narrow screens
    ============================================================================= */
+/* tab strips scroll before the rail collapses: beside the 244px rail the main column is 615–714px
+   between 901 and 1002px, where the four light-curve tabs (717px with their counts) overflowed
+   with the last one cut flush and nothing saying the strip scrolls. The same right-edge fade as
+   the rail, with room after the last tab to scroll it out from under the fade; over a strip that
+   fits (from 1003px up) the fade covers an empty end and is all but invisible. */
+@media (max-width: 1024px) {
+  .tabs .tab {
+    /* a tab reached by keyboard scrolls clear of the fade (App.tsx reveals the focus) */
+    scroll-margin-inline-end: 32px;
+  }
+  .tabs {
+    -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 32px), transparent);
+    mask-image: linear-gradient(90deg, #000 calc(100% - 32px), transparent);
+  }
+  .tabs .tab:last-child {
+    margin-right: 32px;
+  }
+}
 @media (max-width: 900px) {
   .app {
     grid-template-columns: 1fr;
@@ -1392,10 +1500,14 @@ button {
     border-bottom: 1px solid var(--rule-2);
     overflow-x: auto;
     scrollbar-width: none;
-    /* right-edge fade: the last item is clipped mid-word otherwise, with
-       nothing saying the row scrolls */
-    -webkit-mask-image: linear-gradient(90deg, #000 85%, transparent);
-    mask-image: linear-gradient(90deg, #000 85%, transparent);
+    /* right-edge fade: the last item is clipped mid-word otherwise, with nothing saying the
+       row scrolls. A fixed 40px band (not a percentage) so it reads the same at every width. */
+    -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 40px), transparent);
+    mask-image: linear-gradient(90deg, #000 calc(100% - 40px), transparent);
+  }
+  .rail .navlink {
+    /* a view link reached by keyboard scrolls clear of the fade (App.tsx reveals the focus) */
+    scroll-margin-inline-end: 40px;
   }
   .rail::-webkit-scrollbar {
     display: none;
@@ -1412,6 +1524,10 @@ button {
   .navlink.is-active {
     border-left: none;
     border-bottom-color: var(--signal);
+  }
+  .navlink:last-child {
+    /* room to scroll the last view out from under the fade */
+    margin-right: 40px;
   }
   .rail__foot {
     display: none;
@@ -1439,15 +1555,21 @@ button {
   .grid--stats {
     grid-template-columns: 1fr;
   }
-  /* top bar: drop the sub-line and tighten paddings so brand + clock fit */
+  /* top bar: drop the sub-line and tighten the chip paddings */
   .topbar__sub {
     display: none;
   }
-  .tele,
-  .topbar__clock {
+  .tele {
     padding: 0 10px;
   }
-  .topbar__help {
+  /* brand + clock + "?" still overflowed 360px with the strip on its own row (the "?" wrapped
+     to a third row, a 115px bar), so the clock goes: the strip is the live readout, as on
+     orbital */
+  .topbar__clock {
+    display: none;
+  }
+  /* the base rule later in the file has the same specificity, so this one carries the block */
+  .topbar .topbar__help {
     margin: 0 8px;
   }
   /* claims: break between words, never inside one. word-break: break-word
@@ -1471,10 +1593,18 @@ button {
   .panel__meta {
     flex-basis: 100%;
   }
-  /* nav row: tighter links so more of the five fit before the fade */
+  /* nav strip: four views show at 390px instead of two and a half. The 00-05 plate indices
+     go (the names carry the meaning; the indices are ordinal decoration, as on orbital) and
+     the inline padding tightens. */
   .navlink {
-    grid-template-columns: auto 1fr;
-    padding: 9px 12px;
+    display: block;
+    padding: 9px 8px;
+  }
+  .navlink__idx {
+    display: none;
+  }
+  .navlink__name {
+    letter-spacing: 0.05em;
   }
   /* the stat strip gets its own scrolling row under the brand line: squeezed
      between brand and clock it was a 41px sliver. The bar grows to two rows, so
@@ -1486,7 +1616,13 @@ button {
     flex-wrap: wrap;
   }
   .topbar__brand {
+    /* the brand takes the row: the clock, which carried the auto margin that pushed the "?"
+       to the right edge, is hidden on phones */
+    flex: 1;
+    min-width: 0;
     min-height: var(--topbar-h);
+    /* the column rule has nothing to divide once the strip moves below the brand line */
+    border-right: none;
   }
   .topbar__tele {
     order: 3;
@@ -1495,14 +1631,60 @@ button {
     min-height: 32px;
     border-top: 1px solid var(--rule);
     /* right-edge fade: the strip scrolls, and says so */
-    -webkit-mask-image: linear-gradient(90deg, #000 85%, transparent);
-    mask-image: linear-gradient(90deg, #000 85%, transparent);
+    -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 36px), transparent);
+    mask-image: linear-gradient(90deg, #000 calc(100% - 36px), transparent);
   }
   .tele {
     flex-direction: row;
     align-items: center;
     justify-content: flex-start;
     gap: 6px;
+  }
+  .tele:last-child {
+    /* room to scroll the last chip out from under the fade */
+    padding-right: 36px;
+  }
+  /* by-source chips stay on one line: wrapped, the off-screen "Who says what" column made
+     every conflicts row 150-180px tall for a reason the visitor could not see */
+  .dtable .bysrc {
+    flex-wrap: nowrap;
+  }
+  /* the light-curve note, for the same reason: its column starts past the phone's right edge, so
+     one line each, like the chips, and every row is as tall as the pinned name says */
+  .dtable .wrap-cell {
+    white-space: nowrap;
+  }
+  /* tables that name their rows in the first column (conflicts, light curves) keep that
+     column pinned while the rest scrolls under it (ported from orbital) */
+  .table-wrap--sticky-first {
+    /* a control that scrolled under the pinned column comes back out from under it when it
+       takes the focus */
+    scroll-padding-inline-start: 44vw;
+  }
+  .table-wrap--sticky-first th:first-child,
+  .table-wrap--sticky-first td:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    max-width: 44vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    background: var(--surface);
+    box-shadow: 1px 0 0 var(--rule-2);
+  }
+  .table-wrap--sticky-first tbody tr:hover td:first-child {
+    background: var(--surface-2);
+  }
+  .table-wrap--sticky-first tbody tr.is-link:hover td:first-child {
+    background: var(--surface-3);
+    box-shadow: inset 2px 0 0 var(--signal), 1px 0 0 var(--rule-2);
+  }
+  /* the pinned cell sits above the row and its opaque background hides the row's focus ring, so
+     the ring is painted on the cell as well (with the hairline kept); after the hover rule, which
+     would otherwise win while the focused row is also hovered */
+  .table-wrap--sticky-first tbody tr:focus-visible td:first-child,
+  .table-wrap--sticky-first tbody tr.is-link:focus-visible td:first-child {
+    box-shadow: inset 0 0 0 1.5px var(--signal), 1px 0 0 var(--rule-2);
   }
 }
 
@@ -1535,6 +1717,26 @@ button {
     padding-top: 12px;
     padding-bottom: 12px;
   }
+  /* inline links grow their tap box. In a table cell the negative margin keeps the row where
+     it was (the cell's own padding holds the box); in the colophon the lines sit 4px apart,
+     so there the box pushes the lines apart instead of lying over the next line's link. */
+  .dtable td a.mono-hi {
+    display: inline-block;
+    padding: 10px 0;
+    margin: -10px 0;
+  }
+  .colophon a {
+    display: inline-block;
+    padding: 10px 0;
+  }
+  /* the cell truncates with an ellipsis, which cannot shorten an atomic inline: the link
+     truncates itself on a narrow phone */
+  .table-wrap--sticky-first td:first-child a.mono-hi {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    vertical-align: bottom;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   * {
@@ -1559,6 +1761,18 @@ button {
 .heatmap__plot {
   position: relative;
   overflow-x: auto;
+}
+/* the plot sizes its cells to the panel (CongestionHeatmap); when even 6px cells overflow, the
+   component marks the scroller and the right edge fades over a 32px allowance so the last column
+   can scroll out from under the fade, as the nav strip and the tab strips do. Keyed on the
+   overflow, not a viewport width: a fade over a plot that fits would hide its last column. */
+.heatmap__plot.is-scroll {
+  -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 32px), transparent);
+  mask-image: linear-gradient(90deg, #000 calc(100% - 32px), transparent);
+}
+.heatmap__plot.is-scroll .hm-svg {
+  padding-right: 32px;
+  box-sizing: content-box;
 }
 .hm-svg {
   display: block;
@@ -1659,9 +1873,10 @@ button {
 
 /* forecaster caveat + lede */
 .ts-caveat {
+  /* a note, not a disagreement: the amber beside it marks the "⚠ disputed" targets */
   border: 1px solid var(--rule-2);
-  border-left: 2px solid var(--conflict);
-  background: color-mix(in srgb, var(--conflict) 6%, var(--surface));
+  border-left: 2px solid var(--rule-2);
+  background: var(--surface-2);
   padding: 12px 14px;
   margin-bottom: var(--pad);
 }
@@ -1670,7 +1885,7 @@ button {
   font-size: var(--fs-xs);
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--conflict);
+  color: var(--ink-dim);
   margin-bottom: 6px;
 }
 .ts-caveat ul {
@@ -1700,7 +1915,22 @@ button {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
-  align-items: flex-end;
+  /* aligned at the top: every label is one line, so the inputs stay level, and the start
+     field's validation message hangs under its own input without moving it (aligned at the
+     end, the field rose 23px when the message appeared and dropped again when it cleared) */
+  align-items: flex-start;
+}
+.ts-form > .btn--submit {
+  /* on a phone the button has a row of its own */
+  align-self: flex-end;
+}
+@media (min-width: 561px) {
+  .ts-form > .btn--submit {
+    /* beside the fields: pinned under the label line, level with the inputs, so the start
+       field's validation message (which grows the line) no longer drops it under the pointer */
+    align-self: flex-start;
+    margin-top: 20px;
+  }
 }
 .ts-field {
   display: flex;
@@ -1731,11 +1961,29 @@ button {
   font: inherit;
   font-size: var(--fs-sm);
   padding: 8px 10px;
-  outline: none;
 }
 .ts-select:focus,
 .ts-datetime:focus {
   border-color: var(--signal-dim);
+}
+.ts-datetime[aria-invalid="true"] {
+  border-color: var(--err);
+}
+@media (max-width: 560px), (pointer: coarse) {
+  /* under 16px iOS WebKit zooms the page when a control takes focus (a phone in landscape is
+     wider than 560px, so the device trait counts too); class specificity, after the control
+     rules, so it wins over their --fs-sm */
+  .ts-select,
+  .ts-datetime,
+  .searchbar input {
+    font-size: 16px;
+  }
+}
+@media (pointer: coarse) {
+  /* declared after the base rule above, which set its own padding after the touch .btn rule */
+  .btn--submit {
+    padding-block: 11px;
+  }
 }
 
 /* target conflict marker inside the option label / summary */
@@ -1917,6 +2165,12 @@ button {
   color: var(--ink);
   border-color: var(--signal-dim);
 }
+/* the first step's "Back": driver.js fades it to .5 (~2.6:1); faint ink reads instead */
+.driver-popover.exo-tour .driver-popover-btn-disabled {
+  opacity: 1;
+  color: var(--ink-faint);
+  border-color: var(--rule);
+}
 /* arrow triangle tinted to the popover surface on whichever side it points */
 .driver-popover.exo-tour .driver-popover-arrow-side-left {
   border-left-color: var(--surface-2);
@@ -1974,14 +2228,17 @@ button {
   min-width: 0;
 }
 .story__headline {
+  /* a step above the panel title (27 > 19 > 15), the figures lining and tabular; orbital's
+     story lead */
   margin: 0;
   font-family: var(--font-display);
-  font-size: var(--fs-md);
-  font-weight: 460;
+  font-size: var(--fs-lg);
+  font-weight: 420;
   font-variation-settings: "SOFT" 30, "WONK" 0;
-  line-height: 1.45;
+  font-variant-numeric: lining-nums tabular-nums;
+  line-height: 1.4;
   color: var(--ink);
-  max-width: 62ch;
+  max-width: 54ch;
 }
 .panel__body > .story__headline {
   margin-bottom: 12px;
@@ -2023,7 +2280,9 @@ button {
   letter-spacing: 0.04em;
 }
 .story-axis.is-year {
-  fill: var(--ink-ghost);
+  /* words set in ghost fail AA; the year tier recedes by tracking instead */
+  fill: var(--ink-faint);
+  letter-spacing: 0.08em;
 }
 .story-value {
   fill: var(--ink-dim);
@@ -2296,6 +2555,7 @@ button {
   font-size: var(--fs-lg);
   font-weight: 560;
   font-variation-settings: "SOFT" 0, "WONK" 1;
+  line-height: 1.15;
   color: var(--ink);
 }
 .story-hood .hint {
@@ -2331,4 +2591,34 @@ button {
     align-items: center;
     min-height: 44px;
   }
+}
+
+/* =============================================================================
+   Colophon — every view closes under a double rule with the record's provenance in one
+   engraved line: sources, freshest pull, correction channel (shared with orbital).
+   ============================================================================= */
+.colophon {
+  margin-top: auto;
+  padding: 10px 2px 2px;
+  border-top: 3px double var(--rule-2);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  font-size: var(--fs-micro);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.colophon a {
+  /* a link, not a label: one ink step up and a dotted rule, told apart without a pointer */
+  color: var(--ink-dim);
+  text-decoration: underline dotted;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 3px;
+}
+.colophon a:hover {
+  color: var(--signal);
+}
+.colophon .num {
+  color: var(--ink-faint);
 }

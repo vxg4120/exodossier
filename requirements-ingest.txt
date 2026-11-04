@@ -3,8 +3,11 @@
 #   - astropy: KOI host coordinate-matching in identity/build.py (_coord_match_koi)
 #   - PyYAML: source config / ingest ledger parsing
 #   - requests: catalog HTTP pulls in ingest/
+#   - pyarrow: the Parquet engine pandas needs for the light-curve pipeline (pipeline/ reads and
+#     writes per-sector Parquet; tests/test_pipeline.py skips without it)
 # numpy + psycopg already come from requirements-api.txt. All ship aarch64 wheels.
 astropy
+pyarrow
 scipy            # astropy KDTree coordinate matching (identity/build.py) imports it at run time
 PyYAML
 requests
