@@ -18,7 +18,8 @@ export interface AsyncState<T> {
  * list keeps its rows (dimmed by Async) while the next page loads, so its pager stays mounted and
  * keeps focus. `keepKey` names the list the rows belong to (the tab, the cohort): they are kept
  * only while it is unchanged, so a tab change shows the loader like any other change of identity
- * instead of the old tab's rows under the new tab's headers.
+ * instead of the old tab's rows under the new tab's headers. A run that fails drops them too: the
+ * retry then starts from the loader like a first fetch.
  */
 export function useApi<T>(
   loader: () => Promise<T>,
@@ -53,6 +54,9 @@ export function useApi<T>(
       })
       .catch((err: unknown) => {
         if (!cancelled) {
+          // the rows kept through the run answered the previous request, not this one: a retry
+          // shows the loader instead of the previous page, dimmed, under the new range label
+          if (keep) setData(null);
           setError(err instanceof Error ? err.message : "Request failed");
           setLoading(false);
         }

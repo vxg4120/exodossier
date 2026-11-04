@@ -1658,6 +1658,13 @@ button {
     background: var(--surface-3);
     box-shadow: inset 2px 0 0 var(--signal), 1px 0 0 var(--rule-2);
   }
+  /* the pinned cell sits above the row and its opaque background hides the row's focus ring, so
+     the ring is painted on the cell as well (with the hairline kept); after the hover rule, which
+     would otherwise win while the focused row is also hovered */
+  .table-wrap--sticky-first tbody tr:focus-visible td:first-child,
+  .table-wrap--sticky-first tbody tr.is-link:focus-visible td:first-child {
+    box-shadow: inset 0 0 0 1.5px var(--signal), 1px 0 0 var(--rule-2);
+  }
 }
 
 /* comfortable touch targets on touch-first devices */
