@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export interface AsyncState<T> {
   data: T | null;
@@ -16,18 +16,23 @@ export interface AsyncState<T> {
  * out-of-order result. `data` is cleared at the start of each run so a dep change never renders the
  * previous identity's result under the new one while the next loads — unless `keep` is set: a paged
  * list keeps its rows (dimmed by Async) while the next page loads, so its pager stays mounted and
- * keeps focus.
+ * keeps focus. `keepKey` names the list the rows belong to (the tab, the cohort): they are kept
+ * only while it is unchanged, so a tab change shows the loader like any other change of identity
+ * instead of the old tab's rows under the new tab's headers.
  */
 export function useApi<T>(
   loader: () => Promise<T>,
   deps: unknown[],
-  opts?: { keep?: boolean },
+  opts?: { keep?: boolean; keepKey?: unknown },
 ): AsyncState<T> {
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [nonce, setNonce] = useState(0);
   const keep = Boolean(opts?.keep);
+  const keepKey = opts?.keepKey;
+  // the key the rows on screen were fetched under
+  const keyRef = useRef(keepKey);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const run = useCallback(loader, deps);
@@ -36,7 +41,9 @@ export function useApi<T>(
     let cancelled = false;
     setLoading(true);
     setError(null);
-    if (!keep) setData(null);
+    const same = Object.is(keyRef.current, keepKey);
+    keyRef.current = keepKey;
+    if (!keep || !same) setData(null);
     run()
       .then((result) => {
         if (!cancelled) {
@@ -53,7 +60,7 @@ export function useApi<T>(
     return () => {
       cancelled = true;
     };
-  }, [run, nonce, keep]);
+  }, [run, nonce, keep, keepKey]);
 
   const reload = useCallback(() => setNonce((n) => n + 1), []);
   return { data, loading, error, reload, keep };

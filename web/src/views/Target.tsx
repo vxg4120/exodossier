@@ -118,7 +118,7 @@ function TargetCard({ detail }: { detail: TargetDetail }) {
         title="Who says what"
         meta={
           nConflict > 0
-            ? `${nConflict} attribute${nConflict === 1 ? "" : "s"} disagree across sources`
+            ? `${nConflict} attribute${nConflict === 1 ? " disagrees" : "s disagree"} across sources`
             : "every source's claim, by attribute"
         }
         flush

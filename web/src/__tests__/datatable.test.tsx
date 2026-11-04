@@ -25,6 +25,17 @@ describe("Pager", () => {
     const html = renderToStaticMarkup(<Pager offset={0} limit={40} total={0} shown={0} onOffset={noop} />);
     expect(html).toContain("0–0 of 0");
   });
+  // the Prev just pressed to reach page one stays focusable while it goes inert: a control
+  // disabled under the keyboard focus drops it to the body
+  it("marks the end buttons aria-disabled, never disabled", () => {
+    const first = renderToStaticMarkup(<Pager offset={0} limit={40} total={60} shown={40} onOffset={noop} />);
+    expect(first).toContain('aria-disabled="true">‹ Prev');
+    expect(first).toContain('<button class="btn">Next ›');
+    expect(first).not.toContain(" disabled");
+    const last = renderToStaticMarkup(<Pager offset={40} limit={40} total={60} shown={20} onOffset={noop} />);
+    expect(last).toContain('<button class="btn">‹ Prev');
+    expect(last).toContain('aria-disabled="true">Next ›');
+  });
 });
 
 /** A list refetching with useApi's `keep` stays on screen, dimmed and marked busy, so the pager

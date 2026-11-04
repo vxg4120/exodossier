@@ -734,13 +734,16 @@ button {
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
-.btn:hover:not(:disabled) {
+.btn:hover:not(:disabled):not([aria-disabled="true"]) {
   color: var(--ink);
   border-color: var(--signal-dim);
 }
-.btn:disabled {
+.btn:disabled,
+.btn[aria-disabled="true"] {
   /* inert, not faded: at opacity .4 the "Prev" on page one fell to ~2.1:1; faint ink on the
-     bare surface reads at 5.3:1 and the --rule border still says it does nothing */
+     bare surface reads at 5.3:1 and the --rule border still says it does nothing. The pager's
+     end buttons go inert with aria-disabled (DataTable): a control disabled under the keyboard
+     focus drops it to the body */
   opacity: 1;
   color: var(--ink-faint);
   border-color: var(--rule);
@@ -892,6 +895,11 @@ button {
   padding-right: max(14px, calc(100% - 80ch));
 }
 .wrap-cell {
+  /* the light-curve note wraps, but never under ~28 characters a line: squeezed to its longest
+     word by a narrow table it ran to 4–7 lines (132px rows) in a column already scrolled off the
+     screen, so the rows were tall for a reason the visitor could not see */
+  display: inline-block;
+  min-width: 28ch;
   white-space: normal;
   color: var(--ink-dim);
 }
@@ -1450,6 +1458,20 @@ button {
 /* =============================================================================
    Responsive — collapse rail under the top bar on narrow screens
    ============================================================================= */
+/* tab strips scroll before the rail collapses: beside the 244px rail the main column is 615–714px
+   between 901 and 1002px, where the four light-curve tabs (717px with their counts) overflowed
+   with the last one cut flush and nothing saying the strip scrolls. The same right-edge fade as
+   the rail, with room after the last tab to scroll it out from under the fade; over a strip that
+   fits (from 1003px up) the fade covers an empty end and is all but invisible. */
+@media (max-width: 1024px) {
+  .tabs {
+    -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 32px), transparent);
+    mask-image: linear-gradient(90deg, #000 calc(100% - 32px), transparent);
+  }
+  .tabs .tab:last-child {
+    margin-right: 32px;
+  }
+}
 @media (max-width: 900px) {
   .app {
     grid-template-columns: 1fr;
@@ -1498,15 +1520,6 @@ button {
   }
   .rail__foot {
     display: none;
-  }
-  /* tab strips scroll under 900px: the same right-edge fade as the rail, with room after the
-     last tab to scroll it out from under the fade */
-  .tabs {
-    -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 32px), transparent);
-    mask-image: linear-gradient(90deg, #000 calc(100% - 32px), transparent);
-  }
-  .tabs .tab:last-child {
-    margin-right: 32px;
   }
   .grid--stats {
     grid-template-columns: 1fr 1fr;
@@ -1619,6 +1632,11 @@ button {
      every conflicts row 150-180px tall for a reason the visitor could not see */
   .dtable .bysrc {
     flex-wrap: nowrap;
+  }
+  /* the light-curve note, for the same reason: its column starts past the phone's right edge, so
+     one line each, like the chips, and every row is as tall as the pinned name says */
+  .dtable .wrap-cell {
+    white-space: nowrap;
   }
   /* tables that name their rows in the first column (conflicts, light curves) keep that
      column pinned while the rest scrolls under it (ported from orbital) */
@@ -1857,7 +1875,14 @@ button {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
-  align-items: flex-end;
+  /* aligned at the top: every label is one line, so the inputs stay level, and the start
+     field's validation message hangs under its own input without moving it (aligned at the
+     end, the field rose 23px when the message appeared and dropped again when it cleared) */
+  align-items: flex-start;
+}
+.ts-form > .btn--submit {
+  /* the button keeps the row's bottom edge, level with the inputs */
+  align-self: flex-end;
 }
 .ts-field {
   display: flex;

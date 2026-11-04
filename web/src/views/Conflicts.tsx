@@ -28,9 +28,11 @@ export function Conflicts() {
   const setOffset = (next: number) => setOffsets((o) => ({ ...o, [tab]: next }));
 
   const stats = useApi(() => getStats(), []);
-  // keep: the rows stay on screen, dimmed, while the next page loads, so the pager keeps focus
+  // keep: the rows stay on screen, dimmed, while the next page loads, so the pager keeps focus;
+  // keyed by the tab, so a tab change shows the loader, not the old tab's rows under new headers
   const page = useApi<ConflictsResponse>(() => getConflicts(tab, LIMIT, offset), [tab, offset], {
     keep: true,
+    keepKey: tab,
   });
   const counts = stats.data?.conflicts;
   const open = (r: ConflictRow) => navigate(`/target/${r.candidate_id}`);

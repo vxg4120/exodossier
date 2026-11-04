@@ -1,5 +1,26 @@
 import { describe, expect, it } from "vitest";
+import indexHtml from "../../index.html?raw";
 import { canonicalFor, metaForPath, ROUTE_META, SITE_ORIGIN } from "../seo";
+
+/** index.html carries the root copy for whoever reads the raw file (static hosting, view-source,
+    a fetcher that runs neither api/seo.py nor the app); the served shell and the mounted head
+    take theirs from the table's "/" entry, so the file must say what the entry says. */
+describe("index.html root copy", () => {
+  const root = ROUTE_META.find((m) => m.pattern === "/");
+  const content = (key: string) =>
+    new RegExp(`<meta\\s+(?:name|property)="${key}"\\s+content="([^"]*)"`, "s").exec(indexHtml)?.[1];
+  it("describes the page the '/' entry describes, in all three description metas", () => {
+    expect(root).toBeDefined();
+    expect(content("description")).toBe(root?.description);
+    expect(content("og:description")).toBe(root?.description);
+    expect(content("twitter:description")).toBe(root?.description);
+  });
+  it("carries the '/' title", () => {
+    expect(/<title>([^<]*)<\/title>/.exec(indexHtml)?.[1]).toBe(root?.title);
+    expect(content("og:title")).toBe(root?.title);
+    expect(content("twitter:title")).toBe(root?.title);
+  });
+});
 
 /** The route table drives the tab title, the share tags and the server-rendered head (api/seo.py
     reads the same JSON), so it has to agree with the paths App.tsx serves. */

@@ -81,11 +81,12 @@ export function Lightcurves() {
   const setOffset = (next: number) => setOffsets((o) => ({ ...o, [cohort ?? "all"]: next }));
 
   const summary = useApi<LightcurveSummary>(() => getLightcurveSummary(), []);
-  // keep: the rows stay on screen, dimmed, while the next page loads, so the pager keeps focus
+  // keep: the rows stay on screen, dimmed, while the next page loads, so the pager keeps focus;
+  // keyed by the cohort, so a tab change shows the loader, not the old slice's rows under the new
   const page = useApi<LightcurveResults>(
     () => getLightcurveResults(LIMIT, offset, cohort),
     [cohort, offset],
-    { keep: true },
+    { keep: true, keepKey: cohort },
   );
   // A TOI the current graph no longer resolves has no target page to open (see isLinkable below).
   const open = (r: LightcurveRow) => navigate(`/target/${r.candidate_id}`);
