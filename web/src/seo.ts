@@ -42,7 +42,12 @@ export function metaForPath(pathname: string): ResolvedMeta {
 }
 
 export function canonicalFor(pattern: string, params: Record<string, string | undefined> = {}): string {
-  const path = generatePath(pattern, params).replace(/\/+$/, "");
+  // matchPath hands back decoded params and generatePath inserts them raw; the canonical must
+  // carry the encoded form, as the address bar and the server-rendered head do
+  const encoded = Object.fromEntries(
+    Object.entries(params).map(([k, v]) => [k, v === undefined ? v : encodeURIComponent(v)]),
+  );
+  const path = generatePath(pattern, encoded).replace(/\/+$/, "");
   return path ? `${SITE_ORIGIN}${path}` : `${SITE_ORIGIN}/`;
 }
 

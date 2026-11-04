@@ -363,6 +363,15 @@ SELECT * FROM le
 _CACHE: dict = {"built_at": 0.0, "arr": None, "meta": None, "norads": None}
 _CACHE_TTL_S = 1800.0
 _CACHE_LOCK = threading.Lock()
+_BUILD_LOCK = threading.Lock()
+# Propagation holds (nsat x steps) float64 arrays, hundreds of MB for the real LEO catalog; two
+# at a time is the box's budget. A third request waits here rather than exhausting memory.
+_PROPAGATE_SLOTS = threading.BoundedSemaphore(2)
+# The time grid is capped by steps, not only by window and step: a 180-minute window at a
+# 15-second step was 721 steps and ~1.5 GB; the step coarsens to keep the grid under this.
+MAX_STEPS = 241
+# Element sets mean something within days of their epoch; a start centuries away is a typo.
+MAX_START_OFFSET = dt.timedelta(days=3650)
 
 
 def _to_jd(t: dt.datetime) -> float:
@@ -428,21 +437,33 @@ def _build_satrecs(rows: list[dict]) -> tuple[SatrecArray, list[dict], np.ndarra
 
 
 def _get_catalog(db) -> tuple[SatrecArray, list[dict], np.ndarray, bool]:
-    now = time.time()
+    def fresh():
+        return _CACHE["arr"] is not None and time.time() - _CACHE["built_at"] < _CACHE_TTL_S
+
     with _CACHE_LOCK:
-        if _CACHE["arr"] is not None and now - _CACHE["built_at"] < _CACHE_TTL_S:
+        if fresh():
             return _CACHE["arr"], _CACHE["meta"], _CACHE["norads"], False
-    t0 = time.time()
-    with db.cursor() as cur:
-        cur.execute(_FETCH_LEO_SQL, {"maxalt": 2000})
-        rows = cur.fetchall()
-    arr, meta, norads = _build_satrecs(rows)
-    log.info(
-        "twoskies: built %d satrecs from %d rows in %.2fs", len(meta), len(rows), time.time() - t0
-    )
-    with _CACHE_LOCK:
-        _CACHE.update(built_at=time.time(), arr=arr, meta=meta, norads=norads)
-    return arr, meta, norads, True
+    # One build at a time: at TTL expiry every concurrent request used to fetch and build its
+    # own copy. Whoever waits re-checks the cache, which the first builder has filled by then.
+    with _BUILD_LOCK:
+        with _CACHE_LOCK:
+            if fresh():
+                return _CACHE["arr"], _CACHE["meta"], _CACHE["norads"], False
+        t0 = time.time()
+        with db.cursor() as cur:
+            cur.execute(_FETCH_LEO_SQL, {"maxalt": 2000})
+            rows = cur.fetchall()
+        arr, meta, norads = _build_satrecs(rows)
+        log.info(
+            "twoskies: built %d satrecs from %d rows in %.2fs",
+            len(meta), len(rows), time.time() - t0,
+        )
+        if meta:
+            # an empty catalog (no fresh elements yet at startup) is not cached: the next
+            # request looks again instead of answering 503 for the whole TTL
+            with _CACHE_LOCK:
+                _CACHE.update(built_at=time.time(), arr=arr, meta=meta, norads=norads)
+        return arr, meta, norads, True
 
 
 def _parse_datetime(value: str | None) -> dt.datetime:
@@ -450,11 +471,31 @@ def _parse_datetime(value: str | None) -> dt.datetime:
         return dt.datetime.now(dt.UTC)
     try:
         parsed = dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except ValueError as exc:
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=dt.UTC)
+        parsed = parsed.astimezone(dt.UTC)
+    except (ValueError, OverflowError) as exc:
+        # OverflowError: a valid ISO instant at the edge of the calendar (0001-01-01+01:00)
         raise HTTPException(status_code=422, detail=f"invalid datetime: {value!r}") from exc
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=dt.UTC)
-    return parsed.astimezone(dt.UTC)
+    now = dt.datetime.now(dt.UTC)
+    if abs(parsed - now) > MAX_START_OFFSET:
+        raise HTTPException(
+            status_code=422,
+            detail=f"datetime {value!r} is more than ten years from now; element sets are only "
+            "meaningful near their epoch",
+        )
+    return parsed
+
+
+def _time_grid(window_min: int, step_sec: int) -> tuple[int, int]:
+    """(steps, step_sec) for a window: the requested step, coarsened as needed so the grid
+    never exceeds MAX_STEPS points."""
+    step = step_sec
+    steps = int(round(window_min * 60 / step)) + 1
+    if steps > MAX_STEPS:
+        step = math.ceil(window_min * 60 / (MAX_STEPS - 1))
+        steps = int(round(window_min * 60 / step)) + 1
+    return steps, step
 
 
 @router.get("/passes")
@@ -494,7 +535,7 @@ def passes(
             s_elev = elev_km
 
     start = _parse_datetime(datetime)
-    steps = int(round(window_min * 60 / step_sec)) + 1
+    steps, step_sec = _time_grid(window_min, step_sec)
     t_wall = time.time()
 
     arr, meta, norads, rebuilt = _get_catalog(db)
@@ -512,7 +553,9 @@ def passes(
         fr[i] = j - jd[i]
 
     t_prop = time.time()
-    err, rpos, _ = arr.sgp4(jd, fr)  # rpos: (nsat, nt, 3) TEME km; err: (nsat, nt) codes
+    with _PROPAGATE_SLOTS:
+        err, rpos, _vel = arr.sgp4(jd, fr)  # rpos: (nsat, nt, 3) TEME km; err: (nsat, nt)
+        del _vel  # velocities are never read; the array is as large as the positions
     prop_ms = (time.time() - t_prop) * 1000.0
 
     # --- TEME -> ECEF (rotate about z by GMST), then topocentric geometry ---

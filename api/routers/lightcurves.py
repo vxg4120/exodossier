@@ -341,14 +341,14 @@ def get_summary(db: Annotated[psycopg.Connection, Depends(get_db)]):
 def get_results(
     db: Annotated[psycopg.Connection, Depends(get_db)],
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
-    offset: Annotated[int, Query(ge=0)] = 0,
+    offset: Annotated[int, Query(ge=0, le=1_000_000)] = 0,
     sort: Annotated[Literal["cohort", "toi", "snr", "period"], Query()] = "cohort",
     cohort: Annotated[str | None, Query(description="gold_planet | gold_fp | discovery")] = None,
 ):
     """One graded row per selected target, each deep-linking to /target/{candidate_id}."""
     if cohort is not None and cohort not in COHORTS:
         raise HTTPException(
-            status_code=400,
+            status_code=422,
             detail=f"unknown cohort {cohort!r}; expected one of {list(COHORTS)}",
         )
     rows = _sort_rows(_load(db, cohort), sort)

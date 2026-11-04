@@ -63,10 +63,19 @@ def catalog_stats() -> dict[str, Any]:
         return queries.catalog_stats(db)
 
 
+MAX_LIMIT = 200  # the HTTP API's cap; a negative or huge value used to reach SQL as-is
+
+
+def _bad_argument(name: str, value: Any, expected: str) -> dict[str, Any]:
+    return {"error": "bad_argument", "message": f"{name}={value!r}; expected {expected}"}
+
+
 @mcp.tool()
 def search_targets(query: str, limit: int = 25) -> dict[str, Any]:
     """Resolve any TIC / TOI / CTOI / KOI / planet name / host name to candidate targets. A host
     match expands to every candidate of that star. Returns ``{query, count, results}``."""
+    if not isinstance(limit, int) or not 1 <= limit <= MAX_LIMIT:
+        return _bad_argument("limit", limit, f"an integer from 1 to {MAX_LIMIT}")
     with _ro_db() as db:
         results = queries.search_targets(db, query, limit)
     return {"query": query, "count": len(results), "results": results}
@@ -107,6 +116,10 @@ def list_conflicts(type: str = "disposition", limit: int = 25, offset: int = 0) 
             "message": f"unknown conflict type {type!r}",
             "valid_types": list(queries.CONFLICT_TYPES),
         }
+    if not isinstance(limit, int) or not 1 <= limit <= MAX_LIMIT:
+        return _bad_argument("limit", limit, f"an integer from 1 to {MAX_LIMIT}")
+    if not isinstance(offset, int) or not 0 <= offset <= 1_000_000:
+        return _bad_argument("offset", offset, "an integer from 0 to 1,000,000")
     with _ro_db() as db:
         return queries.list_conflicts(db, type, limit, offset)
 

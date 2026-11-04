@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { getLightcurveResults, getLightcurveSummary } from "../api/client";
 import type {
   LightcurveCohort,
@@ -74,11 +74,10 @@ export function Lightcurves() {
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
   const cohort = toCohort(params.get("cohort"));
-  const [offset, setOffset] = useState(0);
-
-  useEffect(() => {
-    setOffset(0);
-  }, [cohort]);
+  // One page offset per cohort tab, so a tab change never first asks for the old page.
+  const [offsets, setOffsets] = useState<Record<string, number>>({});
+  const offset = offsets[cohort ?? "all"] ?? 0;
+  const setOffset = (next: number) => setOffsets((o) => ({ ...o, [cohort ?? "all"]: next }));
 
   const summary = useApi<LightcurveSummary>(() => getLightcurveSummary(), []);
   const page = useApi<LightcurveResults>(
@@ -116,7 +115,9 @@ export function Lightcurves() {
             return (
               <button
                 key={t.label}
+                type="button"
                 className={`tab${cohort === t.key ? " is-active" : ""}`}
+                aria-pressed={cohort === t.key}
                 onClick={() => setParams(t.key ? { cohort: t.key } : {})}
               >
                 {t.label}
@@ -135,7 +136,12 @@ export function Lightcurves() {
 
         <Async state={page} loadingLabel="Loading results" loadingRows={10}>
           {(data) =>
-            data.total === 0 ? (
+            data.total === 0 && cohort && summary.data?.state === "ready" ? (
+              <EmptyState
+                title="No targets in this slice"
+                message="The pipeline has results, but none of its targets fall in this cohort."
+              />
+            ) : data.total === 0 ? (
               <EmptyState
                 title="No pipeline results on this server yet"
                 message={
@@ -157,7 +163,13 @@ export function Lightcurves() {
                   onRowClick={open}
                   isLinkable={(r) => r.candidate_id !== null}
                 />
-                <Pager offset={offset} limit={LIMIT} total={data.total} onOffset={setOffset} />
+                <Pager
+                  offset={offset}
+                  limit={LIMIT}
+                  total={data.total}
+                  shown={data.rows.length}
+                  onOffset={setOffset}
+                />
               </>
             )
           }
@@ -231,7 +243,13 @@ const COLUMNS: Column<LightcurveRow>[] = [
     header: "Candidate",
     render: (r) => (
       <span>
-        <span className="mono-hi">{r.name}</span>
+        {r.candidate_id !== null ? (
+          <Link to={`/target/${r.candidate_id}`} className="mono-hi" onClick={(e) => e.stopPropagation()}>
+            {r.name}
+          </Link>
+        ) : (
+          <span className="mono-hi">{r.name}</span>
+        )}
         {r.toi && !r.name.includes(r.toi) ? <span className="hint"> TOI-{r.toi}</span> : null}
       </span>
     ),

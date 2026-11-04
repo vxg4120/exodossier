@@ -43,7 +43,7 @@ export function About() {
 
       <Panel title="How the conflicts are computed">
         <div className="prose">
-          <h2>Disposition conflicts</h2>
+          <h3>Disposition conflicts</h3>
           <p>
             Each source&rsquo;s raw disposition is mapped to a canonical taxonomy —{" "}
             <code>CONFIRMED</code>, <code>KNOWN_PLANET</code>, <code>CANDIDATE</code>,{" "}
@@ -51,7 +51,7 @@ export function About() {
             sources map to two or more distinct canonical dispositions. The <em>dramatic</em> kind
             pairs a FALSE&nbsp;POSITIVE with a CONFIRMED or KNOWN&nbsp;PLANET.
           </p>
-          <h2>Numeric conflicts (radius, host Teff)</h2>
+          <h3>Numeric conflicts (radius, host Teff)</h3>
           <p>
             A numeric attribute is in conflict when at least two <em>distinct sources</em> report
             values whose relative spread, <code>(max − min) / max</code>, exceeds a threshold: 10% for
@@ -70,7 +70,7 @@ export function About() {
               </>
             ) : null}
             . The frozen v0 conflict report (generated 2026-07-15) recorded 3,274 disposition
-            conflicts (3 dramatic), 1,083 host-Teff and 3,611 radius conflicts; those figures are
+            conflicts (3 dramatic), 1,083 host-Teff and 3,614 radius conflicts; those figures are
             that snapshot&rsquo;s baseline, not the live count.
           </p>
         </div>

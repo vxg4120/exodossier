@@ -14,22 +14,35 @@ describe("fmtInt / compact", () => {
   });
 });
 
+describe("compact unit promotion", () => {
+  it("promotes a value that rounds to 1000K to 1M", () => {
+    expect(compact(999_950)).toBe("1M");
+    expect(compact(999_949)).toBe("999.9K");
+  });
+});
+
 describe("fmtNum (significant figures for physical quantities)", () => {
-  it("keeps three significant figures and the thousands separator", () => {
-    expect(fmtNum(5780)).toBe("5,780");
-    expect(fmtNum(2559.4)).toBe("2,560");
+  it("keeps four significant figures and the thousands separator", () => {
+    expect(fmtNum(5842)).toBe("5,842");
+    expect(fmtNum(7147)).toBe("7,147");
+    expect(fmtNum(2559.4)).toBe("2,559");
     expect(fmtNum(1.5104)).toBe("1.51");
     expect(fmtNum(0.119)).toBe("0.119");
+    expect(fmtNum(292.1669)).toBe("292.2");
+  });
+  it("keeps a BJD epoch or a ppm depth in fixed notation", () => {
+    expect(fmtNum(2458712.3)).toBe("2,458,712.3");
+    expect(fmtNum(120000)).toBe("120,000");
   });
   it("uses exponent form only far outside the everyday range", () => {
-    expect(fmtNum(2459000.5)).toBe("2.46e+6");
     expect(fmtNum(0.0004)).toBe("4.00e-4");
+    expect(fmtNum(2.5e9)).toBe("2.50e+9");
     expect(fmtNum(0)).toBe("0");
     expect(fmtNum(null)).toBe(DASH);
   });
   it("takes a precision override", () => {
-    expect(fmtNum(1.5104, 4)).toBe("1.51");
-    expect(fmtNum(16.6208, 4)).toBe("16.62");
+    expect(fmtNum(1.5104, 3)).toBe("1.51");
+    expect(fmtNum(16.6208, 5)).toBe("16.621");
   });
 });
 

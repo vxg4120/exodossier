@@ -8,6 +8,9 @@ import { Panel } from "../components/Panel";
 import { DispositionBadge } from "../components/DispositionBadge";
 import { EmptyState, ErrorState, Loading } from "../components/States";
 
+/** The API answers at most this many hits (api/routers/search.py), with no total. */
+const SEARCH_CAP = 50;
+
 const EXAMPLES = [
   { q: "TRAPPIST-1", label: "TRAPPIST-1 · Teff conflict (5780 K vs ~2560 K)" },
   { q: "Kepler-1517 b", label: "Kepler-1517 b · FALSE POSITIVE vs CONFIRMED" },
@@ -60,7 +63,13 @@ export function Search() {
 
       <Panel
         title="Results"
-        meta={search.data ? `${fmtInt(search.data.count)} hits` : ""}
+        meta={
+          search.data
+            ? search.data.count >= SEARCH_CAP
+              ? `first ${fmtInt(SEARCH_CAP)} hits · narrow the search`
+              : `${fmtInt(search.data.count)} hits`
+            : undefined
+        }
         flush
       >
         <Results

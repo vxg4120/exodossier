@@ -70,9 +70,7 @@ function Telemetry() {
 }
 
 export default function App() {
-  useEffect(() => {
-    maybeAutoStartTour();
-  }, []);
+  useEffect(() => maybeAutoStartTour(), []);
 
   return (
     <div className="app">

@@ -87,8 +87,8 @@ function TargetCard({ detail }: { detail: TargetDetail }) {
           <KV k="Radius (R⊕)" v={fmtNum(candidate.planet_radius_re)} />
           <KV k="Host Teff (K)" v={fmtNum(star.teff_k)} />
           <KV k="Host R (R☉)" v={fmtNum(star.rstar_rsun)} />
-          <KV k="RA (deg)" v={fmtNum(star.ra_deg)} />
-          <KV k="Dec (deg)" v={fmtNum(star.dec_deg)} />
+          <KV k="RA (deg)" v={star.ra_deg == null ? "—" : star.ra_deg.toFixed(4)} />
+          <KV k="Dec (deg)" v={star.dec_deg == null ? "—" : star.dec_deg.toFixed(4)} />
         </div>
       </div>
 

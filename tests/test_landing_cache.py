@@ -175,12 +175,13 @@ def test_other_pages_and_types_are_computed_fresh(monkeypatch):
     assert conflicts.first_disposition_page.value is None
 
 
-def test_an_unknown_type_is_still_a_400_before_any_query(monkeypatch):
+def test_an_unknown_type_is_still_a_422_before_any_query(monkeypatch):
+    """Bad input is 422 everywhere now (it was 400 here and 422 for limit on the same route)."""
     calls = []
     monkeypatch.setattr(conflicts, "list_conflicts", _fake_list(calls))
     with pytest.raises(HTTPException) as exc:
         conflicts.get_conflicts(DB, type="mass", limit=3, offset=0)
-    assert exc.value.status_code == 400
+    assert exc.value.status_code == 422
     assert calls == []
 
 

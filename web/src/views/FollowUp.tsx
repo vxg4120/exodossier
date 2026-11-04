@@ -50,7 +50,7 @@ const PASS_COLUMNS: Column<PassesResponse["passes"][number]>[] = [
     render: (r) => <span className="num">{r.closest_sep_deg.toFixed(2)}°</span>,
   },
   { key: "alt", header: "Elev", num: true, render: (r) => <span className="num">{r.alt_deg.toFixed(0)}°</span> },
-  { key: "alt_km", header: "Orbit", num: true, render: (r) => <span className="num">{fmtInt(r.alt_km)} km</span> },
+  { key: "alt_km", header: "Orbit", num: true, render: (r) => <span className="num">{fmtInt(Math.round(r.alt_km))} km</span> },
   { key: "time", header: "Time UTC", num: true, render: (r) => <span className="num">{hms(r.time_utc)}</span> },
 ];
 
@@ -101,9 +101,22 @@ export function FollowUp() {
     if (prefill) setSelected(0);
   }, [prefill]);
 
+  // A forecast belongs to the target, start, site and window it was run with: when any of them
+  // changes the old table goes, so the hint line above it can never describe another target's
+  // passes.
+  const currentKey = current ? `${selected}:${current.ra_deg},${current.dec_deg}` : "";
+  useEffect(() => {
+    setPasses((p) => (p.data || p.error ? { loading: false, data: null, error: null } : p));
+  }, [currentKey, when, site, windowMin, sepDeg]);
+
   function run() {
     if (!current) return;
-    const iso = new Date(when).toISOString();
+    const start = new Date(when);
+    if (Number.isNaN(start.getTime())) {
+      setPasses({ loading: false, data: null, error: "Enter a start date and time first." });
+      return;
+    }
+    const iso = start.toISOString();
     setPasses({ loading: true, data: null, error: null });
     getPasses({ ra: current.ra_deg, dec: current.dec_deg, datetime: iso, site, window_min: windowMin, sep_deg: sepDeg })
       .then((data) => setPasses({ loading: false, data, error: null }))

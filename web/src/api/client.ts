@@ -111,8 +111,14 @@ const conflictFixtures: Record<ConflictType, ConflictsResponse> = {
   teff: conflictsTeff as ConflictsResponse,
 };
 
+/** "TIC 278892590" / "tic-278892590" -> "278892590": identifiers are stored bare, and the API
+    strips the same catalog prefix before matching. */
+export function stripCatalogPrefix(q: string): string {
+  return q.trim().replace(/^(tic|kic|epic|gaia(?:\s+dr\d)?)[\s-]+(?=\d)/i, "");
+}
+
 function mockSearch(q: string): SearchResponse {
-  const query = q.trim().toLowerCase();
+  const query = stripCatalogPrefix(q).toLowerCase();
   if (!query) return { query: q, count: 0, results: [] };
   const hits = searchPool
     .filter(

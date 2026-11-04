@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { fmtInt } from "../lib/format";
 
 export interface Column<Row> {
   key: string;
@@ -51,6 +52,8 @@ export function DataTable<Row>({
                 onKeyDown={
                   onClick
                     ? (e) => {
+                        // a key on a link or control inside the row is that control's own
+                        if (e.target !== e.currentTarget) return;
                         if (e.key === "Enter" || e.key === " ") {
                           e.preventDefault();
                           onClick(row);
@@ -78,21 +81,24 @@ export function Pager({
   offset,
   limit,
   total,
+  shown,
   onOffset,
 }: {
   offset: number;
   limit: number;
   total: number;
+  /** Rows on this page, when known: the range then ends where the page really ends. */
+  shown?: number;
   onOffset: (next: number) => void;
 }) {
   const from = total === 0 ? 0 : offset + 1;
-  const to = Math.min(offset + limit, total);
+  const to = Math.min(offset + (shown ?? limit), total);
   const canPrev = offset > 0;
   const canNext = offset + limit < total;
   return (
     <div className="pager">
       <span className="num">
-        {from.toLocaleString()}–{to.toLocaleString()} of {total.toLocaleString()}
+        {fmtInt(from)}–{fmtInt(to)} of {fmtInt(total)}
       </span>
       <span className="pager__spacer" />
       <button className="btn" disabled={!canPrev} onClick={() => onOffset(Math.max(0, offset - limit))}>

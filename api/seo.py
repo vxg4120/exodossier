@@ -19,6 +19,7 @@ import pathlib
 import re
 from functools import lru_cache
 from typing import Any
+from urllib.parse import quote
 
 _WEB = pathlib.Path(__file__).resolve().parent.parent / "web"
 _TABLE_PATHS = (_WEB / "dist" / "seo-routes.json", _WEB / "public" / "seo-routes.json")
@@ -57,8 +58,11 @@ def match(path: str) -> dict[str, Any] | None:
         if m is None:
             continue
         params = m.groupdict()
+        # a param goes back out percent-encoded (the client regenerates its canonical from the
+        # encoded pathname, so "TOI-1836 b" must read %20 on both sides)
         canonical_path = "/".join(
-            params[seg[1:]] if seg.startswith(":") else seg for seg in pattern.strip("/").split("/")
+            quote(params[seg[1:]], safe="") if seg.startswith(":") else seg
+            for seg in pattern.strip("/").split("/")
         )
         return {**entry, "params": params, "canonical_path": f"/{canonical_path}"}
     return None
@@ -104,6 +108,11 @@ def render_head(shell: str, path: str) -> tuple[str, int]:
     if entry is None:
         entry = {**_catch_all(), "noindex": True}
         status = 404
+        canonical = None
+    elif entry.get("noindex"):
+        # a matched route the table keeps out of the index: served, but with no canonical and
+        # the robots tag, as the client does for the same entry
+        status = 200
         canonical = None
     else:
         status = 200

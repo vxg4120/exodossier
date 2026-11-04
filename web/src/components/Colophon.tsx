@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { getStats } from "../api/client";
 
 /** The plate's edge-notes: every view closes under a double rule with the record's provenance
@@ -44,7 +45,7 @@ export function Colophon() {
         </a>
       </span>
       <span>
-        <a href="/about">about &amp; methodology</a>
+        <Link to="/about">about &amp; methodology</Link>
       </span>
       <span>
         corrections:{" "}

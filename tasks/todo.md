@@ -56,3 +56,34 @@ closed port all passed; `pnpm build` clean.
       links tighten (three views fully visible at 390px instead of two), the right-edge fade is a
       fixed 40px band and the last view and last stat chip get room to scroll out from under it
       (measured: last link's right edge meets the fade start exactly, as on orbital).
+- [x] J. Web audit (an independent read of every view, component and helper; 23 findings, each
+      re-verified before the fix): the Follow-up forecast stayed on screen under another
+      target's hint line after a target or input change (it clears on any change now); "Run
+      forecast" threw an uncaught RangeError on an empty start date (a readable message now);
+      fmtNum's three significant figures rounded a 5,842 K host to "5,840" and a BJD epoch to
+      "2.46e+6" (four figures, fixed notation up to 1e9, coordinates at four decimals); the
+      site's own search example "TIC 278892590" returned nothing because identifiers are stored
+      bare (the API and the mock strip the catalog prefix; LIKE metacharacters are literal);
+      About quoted the live radius count (3,611) as the frozen report's (3,614); conflict and
+      light-curve tabs carried no aria-pressed; table rows deep-linked with no real link (the
+      candidate cell is a Link now); tab changes fetched the old page offset first; the
+      disagreement flag was colour-only; an unmapped disposition read as a dash instead of the
+      source's own words; an empty cohort on a populated server read "no results on this
+      server yet"; a cold-start stories payload rendered "0 confirmed planets"; "50 hits" was
+      the cap, not the count; the pager used the browser locale; the client canonical was not
+      percent-encoded (it disagreed with the server's); fmtDayShort threw on a missing date;
+      the heatmap caption counted undrawn bins; the colophon's About link reloaded the app;
+      spread_pct and orbit heights rendered unformatted; About's prose used h2 under an h2.
+- [x] K. API audit (both services): /api/target/² and the MCP resolve tools raised on a
+      unicode digit that str.isdigit() accepts and int() rejects (ASCII digits only now, and
+      the MCP tools return their error dict); /api/twoskies/passes answered 500 for an ISO
+      instant at the calendar's edge (OverflowError) and accepted a start centuries away
+      (422 beyond ten years); its time grid could reach 721 points over the real LEO catalog
+      (~1.5 GB per request; capped at 241 by coarsening the step, velocities dropped, two
+      propagations at a time); an empty catalog was cached for the whole TTL and every
+      request at expiry rebuilt its own copy (single-flight, empty never cached); MCP
+      list_conflicts/search_targets passed limit and offset to SQL unchecked; offsets above
+      int8 reached Postgres as NUMERIC and failed; the server canonical for "/target/TOI-1836
+      b" carried the raw space while the client's carried %20; a matched route marked noindex
+      would have shipped a canonical; bad input answered 400 on some routes and 422 on others
+      (422 everywhere, tests moved).
