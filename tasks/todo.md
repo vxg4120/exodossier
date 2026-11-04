@@ -47,7 +47,7 @@ closed port all passed; `pnpm build` clean.
       Follow-up "Largest operator" tile divided every payload SpaceX ever flew by the tracked LEO
       population (~113% of LEO). The top-operators query now counts on-orbit payloads only
       (decay_date IS NULL) and the tile reads as a share of tracked LEO, clamped at 100.
-- [x] G. vitest (3.x, the line that runs on Vite 5) with 19 unit tests over lib/format (the
+- [x] G. vitest (3.x, the line that runs on Vite 5) with 22 unit tests over lib/format (the
       significant-figure fmtNum), seo (route table vs App.tsx, canonical case and slash rules)
       and States.visitorMessage; the CI web job runs them before the build.
 - [x] H. README: the site's views, the API endpoints, the MCP server that already exists (the

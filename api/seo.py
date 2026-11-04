@@ -58,10 +58,11 @@ def match(path: str) -> dict[str, Any] | None:
         if m is None:
             continue
         params = m.groupdict()
-        # a param goes back out percent-encoded (the client regenerates its canonical from the
-        # encoded pathname, so "TOI-1836 b" must read %20 on both sides)
+        # a param goes back out percent-encoded exactly as the client's encodeURIComponent does
+        # (it leaves ! * ' ( ) bare besides the unreserved set), so "TOI-1836 b" reads %20 and
+        # "Teegarden's Star b" keeps its apostrophe on both sides
         canonical_path = "/".join(
-            quote(params[seg[1:]], safe="") if seg.startswith(":") else seg
+            quote(params[seg[1:]], safe="!*'()") if seg.startswith(":") else seg
             for seg in pattern.strip("/").split("/")
         )
         return {**entry, "params": params, "canonical_path": f"/{canonical_path}"}

@@ -24,6 +24,11 @@ describe("metaForPath", () => {
     expect(m.pattern).toBe("/target/:id");
     expect(m.canonical).toBe(`${SITE_ORIGIN}/target/10589`);
   });
+  it("encodes an id exactly once, whether the pathname arrives encoded or not", () => {
+    expect(metaForPath("/target/TOI-1836%20b").canonical).toBe(`${SITE_ORIGIN}/target/TOI-1836%20b`);
+    expect(metaForPath("/target/TOI-1836 b").canonical).toBe(`${SITE_ORIGIN}/target/TOI-1836%20b`);
+    expect(metaForPath("/target/100%").canonical).toBe(`${SITE_ORIGIN}/target/100%25`);
+  });
   it("lowercases static segments but keeps an id's case, and drops the trailing slash", () => {
     expect(metaForPath("/LightCurves/").canonical).toBe(`${SITE_ORIGIN}/lightcurves`);
     expect(metaForPath("/target/TOI-1836/").canonical).toBe(`${SITE_ORIGIN}/target/TOI-1836`);

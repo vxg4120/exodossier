@@ -1,6 +1,6 @@
 name: CI
 
-# ExoDossier CI, the same two-job shape as orbital-economy-intelligence.
+# ExoDossier CI, the same three-job shape as orbital-economy-intelligence.
 #
 #   lint-and-unit  — ruff + the network-free unit tests (no database). Fast gate: a broken import
 #                    or a logic error is caught in seconds, not after a container spins up.
@@ -39,7 +39,8 @@ jobs:
         # fails here, loudly, instead of passing against a developer's local database.
         env:
           DATABASE_URL: postgresql://oei:oei@127.0.0.1:1/exo
-        run: pytest -q -W error -m "not db"
+        # pyproject's addopts already carries -q; a second one would hide the final tally line
+        run: pytest -W error -m "not db"
 
   db:
     runs-on: ubuntu-latest
@@ -76,7 +77,7 @@ jobs:
         run: python scripts/migrate.py
 
       - name: Full test suite (unit + database)
-        run: pytest -q -W error -rs
+        run: pytest -W error -rs
 
   web:
     runs-on: ubuntu-latest

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
   getCongestionAstronomy,
@@ -105,8 +105,12 @@ export function FollowUp() {
   // changes the old table goes, so the hint line above it can never describe another target's
   // passes.
   const currentKey = current ? `${selected}:${current.ra_deg},${current.dec_deg}` : "";
+  // Each run carries this nonce; a change to the query bumps it, so a forecast still in flight
+  // for the previous target, start, site or window is dropped when it lands instead of shown.
+  const runId = useRef(0);
   useEffect(() => {
-    setPasses((p) => (p.data || p.error ? { loading: false, data: null, error: null } : p));
+    runId.current += 1;
+    setPasses((p) => (p.data || p.error || p.loading ? { loading: false, data: null, error: null } : p));
   }, [currentKey, when, site, windowMin, sepDeg]);
 
   function run() {
@@ -117,12 +121,16 @@ export function FollowUp() {
       return;
     }
     const iso = start.toISOString();
+    const mine = ++runId.current;
     setPasses({ loading: true, data: null, error: null });
     getPasses({ ra: current.ra_deg, dec: current.dec_deg, datetime: iso, site, window_min: windowMin, sep_deg: sepDeg })
-      .then((data) => setPasses({ loading: false, data, error: null }))
-      .catch((e: unknown) =>
-        setPasses({ loading: false, data: null, error: e instanceof Error ? e.message : "Request failed" }),
-      );
+      .then((data) => {
+        if (mine === runId.current) setPasses({ loading: false, data, error: null });
+      })
+      .catch((e: unknown) => {
+        if (mine !== runId.current) return;
+        setPasses({ loading: false, data: null, error: e instanceof Error ? e.message : "Request failed" });
+      });
   }
 
   const optLabel = (t: TwoSkyTarget) =>

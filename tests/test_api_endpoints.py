@@ -14,9 +14,10 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 from api.main import app  # noqa: E402
 
+# Every test needs the database; the ones that assert on catalog content (counts, named stars)
+# carry the graph mark individually, so the contract tests still run on an empty, migrated graph.
 pytestmark = [
     pytest.mark.db,
-    pytest.mark.graph,
     pytest.mark.filterwarnings(r"ignore:Using `httpx`"),
 ]
 
@@ -29,6 +30,7 @@ def test_health():
     assert r.json()["status"] == "ok"
 
 
+@pytest.mark.graph
 def test_stats_shape_and_totals():
     r = client.get("/api/stats")
     assert r.status_code == 200
@@ -44,6 +46,7 @@ def test_stats_shape_and_totals():
     assert isinstance(s["ingest_runs"], list) and len(s["ingest_runs"]) >= 1
 
 
+@pytest.mark.graph
 def test_search_host_expands_to_candidates():
     r = client.get("/api/search", params={"q": "TRAPPIST-1"})
     assert r.status_code == 200
@@ -61,6 +64,7 @@ def test_search_empty_query_returns_nothing():
     assert r.json()["results"] == []
 
 
+@pytest.mark.graph
 def test_search_by_koi_identifier():
     # Kepler-1517 b carries KOI K03728.01; the raw identifier must resolve it.
     r = client.get("/api/search", params={"q": "K03728.01"})
@@ -69,6 +73,7 @@ def test_search_by_koi_identifier():
     assert "Kepler-1517 b" in targets
 
 
+@pytest.mark.graph
 def test_target_by_name_shape():
     r = client.get("/api/target/Kepler-1517 b")
     assert r.status_code == 200
@@ -86,6 +91,7 @@ def test_target_by_name_shape():
     assert isinstance(t["conflict_attributes"], list)
 
 
+@pytest.mark.graph
 def test_target_resolves_by_candidate_id_and_toi_and_host():
     by_name = client.get("/api/target/TRAPPIST-1 b").json()
     cid = by_name["candidate"]["candidate_id"]

@@ -4,6 +4,7 @@ Pure: these exercise the helpers the routes call, with no database.
 """
 
 import datetime as dt
+import html
 
 import pytest
 from fastapi import HTTPException
@@ -76,3 +77,12 @@ def test_canonical_percent_encodes_a_param_with_a_space():
     out, status = render_head(SHELL, "/target/TOI-1836 b")  # the ASGI path is decoded
     assert status == 200
     assert 'href="https://exo.vibcreates.com/target/TOI-1836%20b"' in out
+
+
+def test_canonical_encodes_like_encode_uri_component():
+    # the client builds its canonical with encodeURIComponent, which keeps ! * ' ( ) bare and
+    # encodes + and ,: the server-rendered head must agree character for character
+    out, status = render_head(SHELL, "/target/Teegarden's Star b (c), d+e")
+    assert status == 200
+    expected = "https://exo.vibcreates.com/target/Teegarden's%20Star%20b%20(c)%2C%20d%2Be"
+    assert f'href="{html.escape(expected)}"' in out  # the apostrophe is attribute-escaped

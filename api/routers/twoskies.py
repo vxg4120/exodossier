@@ -553,47 +553,56 @@ def passes(
         fr[i] = j - jd[i]
 
     t_prop = time.time()
+    # The slot brackets the propagation AND the (nsat x nt) geometry after it: those float64
+    # planes are what a request's memory is made of, so each is dropped as soon as the next is
+    # built and the lot is reduced to per-satellite vectors before the slot is released.
     with _PROPAGATE_SLOTS:
         err, rpos, _vel = arr.sgp4(jd, fr)  # rpos: (nsat, nt, 3) TEME km; err: (nsat, nt)
         del _vel  # velocities are never read; the array is as large as the positions
-    prop_ms = (time.time() - t_prop) * 1000.0
+        prop_ms = (time.time() - t_prop) * 1000.0
 
-    # --- TEME -> ECEF (rotate about z by GMST), then topocentric geometry ---
-    gmst = np.array([_gmst_rad(jd[i] + fr[i]) for i in range(steps)])
-    cg, sg = np.cos(gmst), np.sin(gmst)
-    x, y, z = rpos[:, :, 0], rpos[:, :, 1], rpos[:, :, 2]
-    xe = cg * x + sg * y
-    ye = -sg * x + cg * y
-    ze = z
+        # --- TEME -> ECEF (rotate about z by GMST), then topocentric geometry ---
+        gmst = np.array([_gmst_rad(jd[i] + fr[i]) for i in range(steps)])
+        cg, sg = np.cos(gmst), np.sin(gmst)
+        x, y, z = rpos[:, :, 0], rpos[:, :, 1], rpos[:, :, 2]
+        tx = (cg * x + sg * y) - obs_ecef[0]
+        ty = (-sg * x + cg * y) - obs_ecef[1]
+        tz = z - obs_ecef[2]
+        del rpos, x, y, z
+        rng = np.sqrt(tx * tx + ty * ty + tz * tz)
+        ux, uy, uz = tx / rng, ty / rng, tz / rng
+        del tx, ty, tz, rng
+        sat_alt = np.arcsin(np.clip(ux * up[0] + uy * up[1] + uz * up[2], -1.0, 1.0))  # (nsat, nt)
 
-    tx = xe - obs_ecef[0]
-    ty = ye - obs_ecef[1]
-    tz = ze - obs_ecef[2]
-    rng = np.sqrt(tx * tx + ty * ty + tz * tz)
-    ux, uy, uz = tx / rng, ty / rng, tz / rng
-    sat_alt = np.arcsin(np.clip(ux * up[0] + uy * up[1] + uz * up[2], -1.0, 1.0))  # (nsat, nt)
+        # Target sightline: ICRS unit vector, rotated into ECEF at each step (same GMST rotation).
+        ra_r, dec_r = math.radians(ra), math.radians(dec)
+        ti = np.array([
+            math.cos(dec_r) * math.cos(ra_r),
+            math.cos(dec_r) * math.sin(ra_r),
+            math.sin(dec_r),
+        ])
+        gx = cg * ti[0] + sg * ti[1]
+        gy = -sg * ti[0] + cg * ti[1]
+        gz = np.full(steps, ti[2])
+        # target altitude (deg) at each step, shape (nt,)
+        tgt_alt = np.degrees(np.arcsin(np.clip(gx * up[0] + gy * up[1] + gz * up[2], -1.0, 1.0)))
 
-    # Target sightline: ICRS unit vector, rotated into ECEF at each step (same GMST rotation).
-    ra_r, dec_r = math.radians(ra), math.radians(dec)
-    ti = np.array([
-        math.cos(dec_r) * math.cos(ra_r),
-        math.cos(dec_r) * math.sin(ra_r),
-        math.sin(dec_r),
-    ])
-    gx = cg * ti[0] + sg * ti[1]
-    gy = -sg * ti[0] + cg * ti[1]
-    gz = np.full(steps, ti[2])
-    # target altitude (deg) at each step, shape (nt,)
-    tgt_alt = np.degrees(np.arcsin(np.clip(gx * up[0] + gy * up[1] + gz * up[2], -1.0, 1.0)))
+        dot = np.clip(ux * gx[None, :] + uy * gy[None, :] + uz * gz[None, :], -1.0, 1.0)
+        del ux, uy, uz
+        sep = np.degrees(np.arccos(dot))  # (nsat, nt)
+        del dot
 
-    dot = np.clip(ux * gx[None, :] + uy * gy[None, :] + uz * gz[None, :], -1.0, 1.0)
-    sep = np.degrees(np.arccos(dot))  # (nsat, nt)
-
-    # Only count steps where the TARGET is observable and the satellite is above the horizon.
-    target_up = tgt_alt >= min_alt_deg  # (nt,)
-    qualifying = target_up[None, :] & (sat_alt > 0.0) & (err == 0)
-    sep_masked = np.where(qualifying, sep, np.inf)
-    closest = sep_masked.min(axis=1)  # (nsat,)
+        # Only count steps where the TARGET is observable and the satellite is above the horizon.
+        target_up = tgt_alt >= min_alt_deg  # (nt,)
+        qualifying = target_up[None, :] & (sat_alt > 0.0) & (err == 0)
+        del err
+        sep_masked = np.where(qualifying, sep, np.inf)
+        del sep, qualifying
+        closest = sep_masked.min(axis=1)  # (nsat,)
+        j_best = sep_masked.argmin(axis=1)  # (nsat,) the step of each closest approach
+        del sep_masked
+        alt_at_best = sat_alt[np.arange(sat_alt.shape[0]), j_best]  # (nsat,) rad
+        del sat_alt
 
     target_max_alt = float(tgt_alt.max())
     target_visible = bool(target_up.any())
@@ -617,7 +626,7 @@ def passes(
     passes_out: list[dict] = []
     tally: Counter[str] = Counter()
     for i in hit_idx:
-        j = int(np.argmin(sep_masked[i]))
+        j = int(j_best[i])
         m = meta[i]
         operator = op_by_id.get(m["satellite_id"])
         tally[operator or "Unattributed"] += 1
@@ -627,7 +636,7 @@ def passes(
             "operator": operator,
             "alt_km": m["alt_km"],
             "closest_sep_deg": round(float(closest[i]), 3),
-            "alt_deg": round(float(math.degrees(sat_alt[i, j])), 2),
+            "alt_deg": round(float(math.degrees(alt_at_best[i])), 2),
             "time_utc": (
                 start + dt.timedelta(seconds=step_sec * j)
             ).isoformat().replace("+00:00", "Z"),
