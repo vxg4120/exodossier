@@ -360,6 +360,7 @@ button {
   font-weight: 600;
   font-variation-settings: "SOFT" 0, "WONK" 1;
   letter-spacing: 0.005em;
+  line-height: 1.15;
   color: var(--ink);
   margin: 0;
 }
@@ -500,6 +501,8 @@ button {
   color: var(--conflict);
 }
 .stat__sub {
+  /* anchored to the tile's bottom, so a row's subs share a height whatever the numerals wrap */
+  margin-top: auto;
   font-size: var(--fs-xs);
   color: var(--ink-dim);
 }
@@ -585,6 +588,25 @@ button {
   transform: rotate(45deg);
   width: 5px;
   height: 5px;
+}
+
+/* light-curve verdict variants: a square glyph, a different family by shape, so a pipeline
+   result never borrows the disposition scale (a round green dot means "confirmed by the
+   archive" one route earlier) or the conflict amber */
+.badge--verdict .badge__glyph {
+  background: var(--ink-faint);
+  border-radius: 1px;
+}
+.badge--verdict.is-found .badge__glyph {
+  background: var(--ok);
+}
+.badge--verdict.is-partial .badge__glyph {
+  background: var(--ok);
+  opacity: 0.55;
+}
+.badge--verdict.is-failed {
+  color: var(--err);
+  border-color: color-mix(in srgb, var(--err) 40%, var(--rule));
 }
 
 /* source badge: low-chroma identity tint, left tick */
@@ -717,8 +739,19 @@ button {
   border-color: var(--signal-dim);
 }
 .btn:disabled {
-  opacity: 0.4;
+  /* inert, not faded: at opacity .4 the "Prev" on page one fell to ~2.1:1; faint ink on the
+     bare surface reads at 5.3:1 and the --rule border still says it does nothing */
+  opacity: 1;
+  color: var(--ink-faint);
+  border-color: var(--rule);
+  background: transparent;
   cursor: not-allowed;
+}
+.btn[aria-busy="true"] {
+  /* in flight: the control stays enabled (disabling it would drop keyboard focus) and the
+     handler ignores the repeat press */
+  opacity: 0.6;
+  cursor: progress;
 }
 
 /* ingest ledger run state */
@@ -770,10 +803,16 @@ button {
   background: var(--surface-2);
 }
 .conflict-row__count {
+  /* a hero count, so it speaks Fraunces like the stat tiles (the Overview sets the same
+     figure in a tile 400px away); the amber stays */
+  font-family: var(--font-display);
   font-size: var(--fs-xl);
+  font-weight: 580;
+  font-variation-settings: "SOFT" 0, "WONK" 0;
+  font-variant-numeric: lining-nums tabular-nums;
+  line-height: 1.05;
   color: var(--conflict);
   text-align: right;
-  font-weight: 600;
 }
 .conflict-row__body {
   display: flex;
@@ -980,6 +1019,7 @@ button {
 }
 .idhead__name {
   font-size: var(--fs-lg);
+  line-height: 1.15;
   color: var(--ink);
   font-weight: 600;
   margin: 0 0 8px;
@@ -1115,7 +1155,7 @@ button {
 }
 .claims__unit {
   color: var(--ink-faint);
-  font-size: var(--fs-micro);
+  font-size: var(--fs-xs);
   /* units keep their case (K, R⊕, days, BJD) under the uppercase attribute name */
   text-transform: none;
   letter-spacing: 0;
@@ -1148,7 +1188,7 @@ button {
   letter-spacing: 0.03em;
 }
 .claim__ref {
-  font-size: var(--fs-micro);
+  font-size: var(--fs-xs);
   color: var(--ink-faint);
   font-style: italic;
   max-width: 60ch;
@@ -1775,9 +1815,10 @@ button {
 
 /* forecaster caveat + lede */
 .ts-caveat {
+  /* a note, not a disagreement: the amber beside it marks the "⚠ disputed" targets */
   border: 1px solid var(--rule-2);
-  border-left: 2px solid var(--conflict);
-  background: color-mix(in srgb, var(--conflict) 6%, var(--surface));
+  border-left: 2px solid var(--rule-2);
+  background: var(--surface-2);
   padding: 12px 14px;
   margin-bottom: var(--pad);
 }
@@ -1786,7 +1827,7 @@ button {
   font-size: var(--fs-xs);
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--conflict);
+  color: var(--ink-dim);
   margin-bottom: 6px;
 }
 .ts-caveat ul {
@@ -2044,6 +2085,12 @@ button {
   color: var(--ink);
   border-color: var(--signal-dim);
 }
+/* the first step's "Back": driver.js fades it to .5 (~2.6:1); faint ink reads instead */
+.driver-popover.exo-tour .driver-popover-btn-disabled {
+  opacity: 1;
+  color: var(--ink-faint);
+  border-color: var(--rule);
+}
 /* arrow triangle tinted to the popover surface on whichever side it points */
 .driver-popover.exo-tour .driver-popover-arrow-side-left {
   border-left-color: var(--surface-2);
@@ -2153,7 +2200,9 @@ button {
   letter-spacing: 0.04em;
 }
 .story-axis.is-year {
-  fill: var(--ink-ghost);
+  /* words set in ghost fail AA; the year tier recedes by tracking instead */
+  fill: var(--ink-faint);
+  letter-spacing: 0.08em;
 }
 .story-value {
   fill: var(--ink-dim);
@@ -2426,6 +2475,7 @@ button {
   font-size: var(--fs-lg);
   font-weight: 560;
   font-variation-settings: "SOFT" 0, "WONK" 1;
+  line-height: 1.15;
   color: var(--ink);
 }
 .story-hood .hint {

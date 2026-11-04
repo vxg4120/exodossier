@@ -13,7 +13,7 @@ export function About() {
     <div className="view fadein">
       <header className="vhead">
         <div>
-          <h1 className="vhead__title">About &amp; Methodology</h1>
+          <h1 className="vhead__title">About &amp; methodology</h1>
           <p className="vhead__desc">
             What this is, how the conflicts are computed, and who the data belongs to.
           </p>

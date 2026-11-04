@@ -129,7 +129,8 @@ export function FollowUp() {
   }, [currentKey, when, site, windowMin, sepDeg]);
 
   function run() {
-    if (!current) return;
+    // a run in flight ignores the repeat press; the button stays enabled so it keeps focus
+    if (!current || passes.loading) return;
     const start = new Date(when);
     if (Number.isNaN(start.getTime())) {
       setFormError("Enter a start date and time first.");
@@ -267,7 +268,7 @@ export function FollowUp() {
                         ))}
                     </div>
                     <p className="hint">
-                      Objects per ~200 km altitude band (km). The occupied shells are where follow-up
+                      Objects per ~200 km altitude band. The occupied shells are where follow-up
                       exposures collect streaks.
                     </p>
                   </div>
@@ -421,7 +422,7 @@ export function FollowUp() {
                   </select>
                 </div>
 
-                <button className="btn btn--submit" onClick={run} disabled={!current || passes.loading}>
+                <button className="btn btn--submit" onClick={run} disabled={!current} aria-busy={passes.loading || undefined}>
                   {passes.loading ? "Propagating…" : "Run forecast"}
                 </button>
               </div>

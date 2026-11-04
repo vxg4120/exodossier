@@ -33,19 +33,20 @@ function toCohort(v: string | null): LightcurveCohort | null {
   return v === "gold_planet" || v === "gold_fp" || v === "discovery" ? v : null;
 }
 
-/** Verdict -> the existing badge tones, so no new colours: a match reads as confirmed, a
-    harmonic or off-period signal as known, a non-result as unknown, a failed run as a conflict. */
+/** Verdict -> the badge's own verdict family (a square glyph), never the disposition scale or
+    the conflict amber, which mean planet status and cross-source disagreement elsewhere: a match
+    is found, a harmonic or off-period signal partial, a non-result neutral, a failed run failed. */
 const VERDICT_TONE: Record<string, string> = {
-  recovered: "badge--disp disp-confirmed",
-  signal_at_catalog_period: "badge--disp disp-confirmed",
-  recovered_harmonic: "badge--disp disp-known",
-  signal: "badge--disp disp-known",
-  missed: "badge--disp disp-unknown",
-  no_signal: "badge--disp disp-unknown",
-  below_threshold: "badge--disp disp-unknown",
-  pending: "badge--disp disp-unknown",
-  running: "badge--disp disp-unknown",
-  not_processed: "badge--conflict",
+  recovered: "badge--verdict is-found",
+  signal_at_catalog_period: "badge--verdict is-found",
+  recovered_harmonic: "badge--verdict is-partial",
+  signal: "badge--verdict is-partial",
+  missed: "badge--verdict",
+  no_signal: "badge--verdict",
+  below_threshold: "badge--verdict",
+  pending: "badge--verdict",
+  running: "badge--verdict",
+  not_processed: "badge--verdict is-failed",
 };
 
 const VERDICT_SHORT: Record<string, string> = {
@@ -63,7 +64,7 @@ const VERDICT_SHORT: Record<string, string> = {
 
 function VerdictBadge({ verdict, title }: { verdict: string; title?: string }) {
   return (
-    <span className={`badge ${VERDICT_TONE[verdict] ?? "badge--disp disp-unknown"}`} title={title}>
+    <span className={`badge ${VERDICT_TONE[verdict] ?? "badge--verdict"}`} title={title}>
       <span className="badge__glyph" aria-hidden="true" />
       {VERDICT_SHORT[verdict] ?? verdict}
     </span>

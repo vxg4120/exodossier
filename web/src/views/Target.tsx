@@ -94,7 +94,7 @@ function TargetCard({ detail }: { detail: TargetDetail }) {
           </div>
         </div>
         <div className="kv">
-          <KV k="Period (days)" v={fmtNum(candidate.period_days)} />
+          <KV k="Period (d)" v={fmtNum(candidate.period_days)} />
           <KV k="Radius (R⊕)" v={fmtNum(candidate.planet_radius_re)} />
           <KV k="Host Teff (K)" v={fmtNum(star.teff_k)} />
           <KV k="Host R (R☉)" v={fmtNum(star.rstar_rsun)} />

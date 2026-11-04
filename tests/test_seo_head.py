@@ -52,7 +52,9 @@ def test_root():
     assert _attr(out, 'rel="canonical"', "href") == "https://exo.vibcreates.com/"
     assert _attr(out, 'property="og:url"', "content") == "https://exo.vibcreates.com/"
     assert 'name="robots"' not in out
-    assert _attr(out, 'name="description"', "content").startswith("A read-only catalog")
+    assert _attr(out, 'name="description"', "content").startswith(
+        "What changed across the retained archive snapshots"
+    )
 
 
 def test_target_keeps_param_case_and_sets_title():
