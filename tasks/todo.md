@@ -168,3 +168,6 @@ closed port all passed; `pnpm build` clean.
       fixture's (so Next in fixture mode lands on "nothing on this page"); a hook test would
       need a DOM environment; a tab's focus ring under the fade is pre-existing where the strip
       fits.
+- [x] O. The 404 page opens with the chapter head like every other view (it was an empty state
+      with no h1, the one route whose heading outline differed): "Page not found" as the h1,
+      the path in the description, the two ways back beneath.
