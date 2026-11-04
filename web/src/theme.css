@@ -63,7 +63,9 @@
   --fs-hero: 42px;
 
   /* ---- geometry ---- */
-  --rail-w: 210px;
+  /* wide enough for the brand's sub-line ("Conflict Explorer · Read-only") on one line at
+     --fs-micro; at 210px it ran 26px past the brand column's border. Same width as orbital. */
+  --rail-w: 244px;
   --topbar-h: 46px;
   --pad: 20px;
 
@@ -2331,4 +2333,30 @@ button {
     align-items: center;
     min-height: 44px;
   }
+}
+
+/* =============================================================================
+   Colophon — every view closes under a double rule with the record's provenance in one
+   engraved line: sources, freshest pull, correction channel (shared with orbital).
+   ============================================================================= */
+.colophon {
+  margin-top: auto;
+  padding: 10px 2px 2px;
+  border-top: 3px double var(--rule-2);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  font-size: var(--fs-micro);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.colophon a {
+  color: var(--ink-faint);
+}
+.colophon a:hover {
+  color: var(--signal);
+}
+.colophon .num {
+  color: var(--ink-faint);
 }

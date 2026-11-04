@@ -5,6 +5,8 @@
    from the main client so the shared client/types stay untouched.
    ============================================================================= */
 
+import { fetchJson } from "./client";
+
 const BASE = "/api/twoskies";
 
 export interface TwoSkyTarget {
@@ -94,18 +96,7 @@ async function get<T>(path: string, params?: Record<string, string | number>): P
   const qs = params
     ? "?" + new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)])).toString()
     : "";
-  const res = await fetch(`${BASE}${path}${qs}`, { headers: { accept: "application/json" } });
-  if (!res.ok) {
-    let detail = `${res.status} ${res.statusText}`;
-    try {
-      const j = (await res.json()) as { detail?: string };
-      if (j?.detail) detail = j.detail;
-    } catch {
-      /* non-JSON error body — keep the status line */
-    }
-    throw new Error(detail);
-  }
-  return (await res.json()) as T;
+  return fetchJson<T>(`${BASE}${path}${qs}`, `/twoskies${path}`);
 }
 
 export function getTargets(): Promise<TargetsResponse> {

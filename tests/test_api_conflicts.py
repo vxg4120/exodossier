@@ -10,26 +10,16 @@ import warnings
 
 warnings.filterwarnings("ignore", message=r"Using `httpx`")
 
-import psycopg  # noqa: E402
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
 from api.main import app  # noqa: E402
-from common.db import get_conn  # noqa: E402
 
-pytestmark = pytest.mark.filterwarnings(r"ignore:Using `httpx`")
-
-
-def _db_reachable() -> bool:
-    try:
-        get_conn().close()
-        return True
-    except psycopg.OperationalError:
-        return False
-
-
-if not _db_reachable():
-    pytest.skip("exo database not reachable at DATABASE_URL", allow_module_level=True)
+pytestmark = [
+    pytest.mark.db,
+    pytest.mark.graph,
+    pytest.mark.filterwarnings(r"ignore:Using `httpx`"),
+]
 
 client = TestClient(app)
 

@@ -54,6 +54,7 @@ def client(db_conn):
 
 # --------------------------------------------------------------------------- /targets (exo)
 @pytest.mark.db
+@pytest.mark.graph
 def test_targets_shape_and_conflict_flag(client):
     r = client.get("/api/twoskies/targets")
     assert r.status_code == 200

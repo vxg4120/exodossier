@@ -9,6 +9,7 @@ requires-python = ">=3.12"
 addopts = "-q -W error"
 markers = [
     "db: test requires a reachable DATABASE_URL (the exo database)",
+    "graph: test asserts on the populated identity graph; skipped when the database is empty",
 ]
 testpaths = ["tests"]
 

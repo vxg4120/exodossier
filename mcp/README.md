@@ -32,13 +32,15 @@ database (`DATABASE_URL`, default `postgresql://oei:oei@localhost:5433/exo`).
 
 ```bash
 # from the repo root, using the Python 3.14 venv
-.venv/bin/pip install -r requirements-api.txt   # fastapi/uvicorn/httpx + mcp==1.14.1
+.venv/bin/pip install -r requirements-api.txt   # fastapi/uvicorn/httpx + mcp 1.x
 .venv/bin/python mcp/server.py                  # stdio transport; blocks, serving the client
 ```
 
-> **Python 3.14 note.** `mcp` is pinned to `1.14.1`: newer releases pull `pyjwt[crypto]` →
-> `cryptography`, whose current sdist fails to build on 3.14 (no compatible wheel). 1.14.1 is the
-> newest release whose dependency set is wheels-only on 3.14 and still ships the API used here.
+> **SDK version.** `mcp` is bounded to `>=1.30,<2`: the 2.x SDK renames `FastMCP` to
+> `MCPServer` and changes the tool API, so this server (written against the 1.x `FastMCP`
+> surface) stays on 1.x until it is ported. An exact pin to an old 1.x release is avoided on
+> purpose: 1.14.1 imported a private pydantic helper that pydantic 2.14 removed, which broke
+> `import mcp` beside a current FastAPI.
 
 > The `mcp/` directory is intentionally **not** a Python package (no `__init__.py`) so it never
 > shadows the installed `mcp` SDK; `server.py` appends the repo root to `sys.path` to import

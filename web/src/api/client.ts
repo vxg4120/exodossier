@@ -42,16 +42,56 @@ export class ApiError extends Error {
 }
 
 /* ---- real transport ------------------------------------------------------- */
+/** Upper bound on any GET, as on orbital. A request the API never answers (a cold cache warming
+    an aggregate, a dropped connection) would otherwise leave the view on its loading state with
+    no way out; past this the caller's Async state shows the error with a Retry control. */
+export const REQUEST_TIMEOUT_MS = 30_000;
+
+/** fetch with the timeout, the JSON accept header and a readable failure for every outcome:
+    a non-2xx status, a timeout, and a body that is not JSON (a proxy's HTML error page served
+    with a 200) each name the path they failed on. */
+export async function fetchJson<T>(url: string, path: string): Promise<T> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, {
+      headers: { accept: "application/json" },
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      let detail = `${res.status} ${res.statusText} for ${path}`;
+      try {
+        const j = (await res.json()) as { detail?: string };
+        if (typeof j?.detail === "string") detail = `${res.status} ${j.detail} for ${path}`;
+      } catch {
+        /* non-JSON error body: keep the status line */
+      }
+      throw new ApiError(detail, res.status);
+    }
+    try {
+      return (await res.json()) as T;
+    } catch {
+      throw new ApiError(`Not JSON from the API for ${path}`, res.status);
+    }
+  } catch (err) {
+    if (controller.signal.aborted) {
+      throw new ApiError(
+        `No answer from the API within ${REQUEST_TIMEOUT_MS / 1000}s for ${path}`,
+        0,
+      );
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function realGet<T>(path: string, params?: Record<string, string | number>): Promise<T> {
   const qs = params
     ? "?" +
       new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)])).toString()
     : "";
-  const res = await fetch(`/api${path}${qs}`, { headers: { accept: "application/json" } });
-  if (!res.ok) {
-    throw new ApiError(`${res.status} ${res.statusText} for ${path}`, res.status);
-  }
-  return (await res.json()) as T;
+  return fetchJson<T>(`/api${path}${qs}`, path);
 }
 
 /* ---- mock transport ------------------------------------------------------- */

@@ -10,10 +10,7 @@ import json
 import sys
 from pathlib import Path
 
-import psycopg
 import pytest
-
-from common.db import get_conn
 
 anyio = pytest.importorskip("anyio")
 pytest.importorskip("mcp")
@@ -24,17 +21,7 @@ from mcp import ClientSession, StdioServerParameters  # noqa: E402
 
 _SERVER = Path(__file__).resolve().parent.parent / "mcp" / "server.py"
 
-
-def _db_reachable() -> bool:
-    try:
-        get_conn().close()
-        return True
-    except psycopg.OperationalError:
-        return False
-
-
-if not _db_reachable():
-    pytest.skip("exo database not reachable at DATABASE_URL", allow_module_level=True)
+pytestmark = [pytest.mark.db, pytest.mark.graph]
 
 
 async def _call(tool: str, args: dict) -> dict:

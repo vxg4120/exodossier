@@ -21,6 +21,8 @@ export function Loading({ label = "Fetching", rows }: { label?: string; rows?: n
   );
 }
 
+const REASON_PHRASES = /^(bad request|unauthorized|forbidden|not found|method not allowed|not acceptable|request timeout|conflict|gone|payload too large|unprocessable (entity|content)|too many requests|internal server error|bad gateway|service unavailable|gateway timeout)$/i;
+
 /** What a visitor reads when a fetch fails. The raw message names API paths and browser
     internals; it stays available in the title for whoever is debugging. */
 export function visitorMessage(raw: string): string {
@@ -30,12 +32,20 @@ export function visitorMessage(raw: string): string {
   if (/^no answer\b.* for \//i.test(raw)) {
     return "The API took too long to answer. Retry in a moment.";
   }
-  const status = /^(\d{3})\b.* for \//.exec(raw);
+  if (/^not json\b.* for \//i.test(raw) || /unexpected token|json\.parse|not valid json/i.test(raw)) {
+    return "The API answered with something that is not data. It may be restarting; retry in a moment.";
+  }
+  const status = /^(\d{3}) (.*) for \//.exec(raw);
   if (status) {
     const code = Number(status[1]);
+    const text = status[2].trim();
     if (code === 404) return "Nothing in the catalog answers to that address.";
+    if (code === 429) return "Too many requests at once. Wait a moment, then retry.";
     if (code >= 500) return "The API hit an error on its side. Retry in a moment.";
-    return `The API turned the request down (status ${code}).`;
+    // the API's own words when it gave any (a 422 names the bad parameter); the status otherwise
+    return text && !REASON_PHRASES.test(text)
+      ? `The API turned the request down: ${text}`
+      : `The API turned the request down (status ${code}).`;
   }
   return raw;
 }

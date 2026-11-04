@@ -3,6 +3,7 @@ import { NavLink, Route, Routes } from "react-router-dom";
 import { getStats, MOCK } from "./api/client";
 import { useApi } from "./hooks/useApi";
 import { compact, fmtInt } from "./lib/format";
+import { Colophon } from "./components/Colophon";
 import { RouteMeta } from "./components/RouteMeta";
 import { SourceBadge } from "./components/SourceBadge";
 import { Loading } from "./components/States";
@@ -142,6 +143,7 @@ export default function App() {
             <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>
+        <Colophon />
       </main>
     </div>
   );
