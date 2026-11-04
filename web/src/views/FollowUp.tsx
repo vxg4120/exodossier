@@ -145,7 +145,11 @@ export function FollowUp() {
         <Async state={congestion} loadingLabel="Loading congestion field">
           {(c) => {
             const spacex = c.top_operators.find((o) => /spacex/i.test(o.operator));
-            const spacexPct = spacex ? Math.round((100 * spacex.payloads) / c.leo_objects) : null;
+            // on-orbit payloads against the tracked LEO population: a share, so never over 100
+            const spacexPct =
+              spacex && c.leo_objects > 0
+                ? Math.min(100, Math.round((100 * spacex.payloads) / c.leo_objects))
+                : null;
             const shellMax = Math.max(1, ...c.shells.map((s) => s.objects));
             return (
               <>
@@ -179,7 +183,8 @@ export function FollowUp() {
                     sub={
                       spacexPct !== null ? (
                         <>
-                          SpaceX · ~<span className="num">{spacexPct}%</span> of LEO
+                          SpaceX payloads on orbit · ~<span className="num">{spacexPct}%</span> of
+                          tracked LEO
                         </>
                       ) : (
                         "payloads on orbit"

@@ -49,14 +49,46 @@ Regenerate it with `make report` → [`docs/reports/conflict_report.md`](docs/re
 **Wave 2 in progress** — the light-curve pipeline (MAST / `lightkurve` download for a
 long-period / single-transit target slice, detrend, multi-sector stitch, independent BLS/TLS transit
 recovery, TRICERATOPS false-positive scenarios), with Parquet columnar storage. Later waves:
-AI-orchestrated cited dossiers graded against TFOPWG dispositions (gold program), then a public
-dossier site and MCP server (`resolve_target`, `candidate_dossier`, `conflicts_for_target`,
-`rerank_targets`). See [`docs/SPEC.md`](docs/SPEC.md) for the full roadmap.
+AI-orchestrated cited dossiers graded against TFOPWG dispositions (gold program), then the
+dossier tools (`candidate_dossier`, `rerank_targets`) on the MCP server that already serves
+`resolve_target`, `target_conflicts`, `search_targets`, `list_conflicts` and `catalog_stats`. See [`docs/SPEC.md`](docs/SPEC.md) for the full roadmap.
 
 The pipeline's recovery results are on the site at `/lightcurves`, read from
 `GET /api/lightcurves/summary`, `GET /api/lightcurves/results?limit&offset&sort&cohort` and
 `GET /api/lightcurves/target/{candidate_id}` (spec:
 [`docs/specs/lightcurves-wave2.md`](docs/specs/lightcurves-wave2.md)).
+
+## The site and the API
+
+A read-only FastAPI service (`api/`, every query parameterized and LIMIT-bounded) over the graph,
+and a Vite + React + TypeScript SPA (`web/`) served from the same process, sharing one
+instrument-style design with the satellite terminal (dark plate, Fraunces headings, mono data).
+Live at <https://exo.vibcreates.com>.
+
+- **Overview (`/`)** — what changed across the retained archive snapshots: the confirmed list's
+  growth, what the new planets look like and who found them, TESS follow-up verdicts, the
+  candidate queue, the conflict corpus and the dramatic cases, then the graph under the hood.
+- **Search (`/search`)** — resolve any star or candidate by TIC, TOI, CTOI, KOI, planet name or
+  host name.
+- **Target (`/target/:id`)** — one candidate and its host: the identifier crosswalk, what every
+  source asserts about each attribute (the who-says-what table), and where they disagree.
+- **Conflicts (`/conflicts`)** — the browsable corpus: disposition, planet-radius and host-Teff
+  disagreements, every row linking to the target.
+- **Light curves (`/lightcurves`)** — the pipeline's transit-recovery results, graded against the
+  catalog period.
+- **Follow-up (`/followup`)** — for a candidate you want to confirm from the ground, which tracked
+  satellites cross its line of sight during your observing window (joins the hosts to the
+  satellite graph; illustrative, not operational).
+- **About (`/about`)** — what the conflicts mean, how they are computed, and whose data it is.
+
+Endpoints: `/api/health`, `/api/stats`, `/api/stories`, `/api/search?q=`, `/api/target/{id}`,
+`/api/conflicts?type=disposition|radius|teff&limit&offset`, `/api/attribution`,
+`/api/lightcurves/*`, `/api/twoskies/*`. The MCP server in [`mcp/`](mcp/README.md) exposes the
+same graph to agents as five read-only tools.
+
+CI (`.github/workflows/ci.yml`) runs ruff and the network-free unit tests, a Postgres 16 job that
+migrates the schema and runs the full suite (tests marked `graph` need a built catalog and skip on
+the empty database), and the web build.
 
 ## Quickstart
 

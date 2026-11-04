@@ -9,6 +9,7 @@ name: CI
 #                    assert on the populated catalog and skip on this empty database; everything
 #                    else (schema, planted fixtures, API contracts, the MCP server's own
 #                    error paths) runs for real. No live network pulls ever happen here.
+#   web            — the SPA: pnpm install, the vitest unit tests, then tsc + vite build.
 
 on:
   push:
@@ -97,6 +98,9 @@ jobs:
 
       - name: Install
         run: pnpm install --frozen-lockfile
+
+      - name: Unit tests
+        run: pnpm test
 
       - name: Type-check and build
         run: pnpm build

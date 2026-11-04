@@ -240,13 +240,16 @@ SELECT
         WHERE object_type = 'PAYLOAD' AND launch_date > current_date - 30)  AS payloads_launched_30d
 """
 
+# Payloads still on orbit per current owner. Without the decay filter the count included every
+# payload the operator ever flew (SpaceX: ~13,000 against ~11,000 tracked LEO objects), and the
+# Follow-up tile that divides it by leo_objects read "~113% of LEO".
 _TOP_OPERATORS_SQL = """
 SELECT o.canonical_name AS operator, count(*) AS payloads
 FROM satellite s
 JOIN satellite_operator so ON so.satellite_id = s.satellite_id
     AND so.role = 'owner' AND so.valid_to IS NULL
 JOIN operator o ON o.operator_id = so.operator_id
-WHERE s.object_type = 'PAYLOAD'
+WHERE s.object_type = 'PAYLOAD' AND s.decay_date IS NULL
 GROUP BY o.canonical_name
 ORDER BY count(*) DESC, o.canonical_name
 LIMIT 8

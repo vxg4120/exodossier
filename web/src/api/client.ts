@@ -28,6 +28,7 @@ import conflictsRadius from "./fixtures/conflicts_radius.json";
 import conflictsTeff from "./fixtures/conflicts_teff.json";
 import attributionFixture from "./fixtures/attribution.json";
 import storiesFixture from "./fixtures/stories.json";
+import lightcurvesFixture from "./fixtures/lightcurves.json";
 
 export const MOCK = import.meta.env.VITE_API_MOCK === "1";
 
@@ -96,7 +97,7 @@ async function realGet<T>(path: string, params?: Record<string, string | number>
 
 /* ---- mock transport ------------------------------------------------------- */
 const MOCK_LATENCY_MS = 130;
-const delay = <T>(value: T): Promise<T> =>
+export const delay = <T>(value: T): Promise<T> =>
   new Promise((resolve) => setTimeout(() => resolve(value), MOCK_LATENCY_MS));
 
 const searchPool = (searchFixture as { results: SearchResult[] }).results;
@@ -192,36 +193,16 @@ export function getAttribution(): Promise<Attribution> {
   return realGet<Attribution>("/attribution");
 }
 
-/* Mock mode has no pipeline output to replay, so it answers the way an unpopulated database does:
-   the real empty state, not invented rows. */
-const EMPTY_LIGHTCURVE_SUMMARY: LightcurveSummary = {
-  state: "empty",
-  targets: 0,
-  processed: 0,
-  not_processed: 0,
-  pending: 0,
-  gold_planets: { targets: 0, recovered: 0, recovered_exact: 0 },
-  gold_false_positives: { targets: 0, with_signal: 0 },
-  discovery: { targets: 0, with_signal: 0 },
-  by_cohort: {} as LightcurveSummary["by_cohort"],
-  last_run_at: null,
-  data_vintage: null,
-  run_attempts: 0,
-  median_runtime_s: null,
-  lightcurve_files: 0,
-  lightcurve_stars: 0,
-  last_fetch_at: null,
-  rules: {
-    period_tolerance: 0.01,
-    snr_min: 7,
-    statement:
-      "A recovery is a BLS or TLS period within 1% of the catalog period, or a harmonic of it, at SNR >= 7.",
-  },
-  verdicts: {},
+/* Mock mode replays a small pipeline output (fixtures/lightcurves.json: twenty graded TOIs across
+   the three cohorts, generated from the mock target map so every row's link resolves), paged and
+   filtered the way the API does it. */
+const lightcurveData = lightcurvesFixture as unknown as {
+  summary: LightcurveSummary;
+  rows: LightcurveResults["rows"];
 };
 
 export function getLightcurveSummary(): Promise<LightcurveSummary> {
-  if (MOCK) return delay(EMPTY_LIGHTCURVE_SUMMARY);
+  if (MOCK) return delay(lightcurveData.summary);
   return realGet<LightcurveSummary>("/lightcurves/summary");
 }
 
@@ -230,7 +211,19 @@ export function getLightcurveResults(
   offset: number,
   cohort: LightcurveCohort | null,
 ): Promise<LightcurveResults> {
-  if (MOCK) return delay({ rows: [], total: 0, limit, offset, sort: "cohort", cohort });
+  if (MOCK) {
+    const all = cohort
+      ? lightcurveData.rows.filter((r) => r.cohort === cohort)
+      : lightcurveData.rows;
+    return delay({
+      rows: all.slice(offset, offset + limit),
+      total: all.length,
+      limit,
+      offset,
+      sort: "cohort",
+      cohort,
+    });
+  }
   const params: Record<string, string | number> = { limit, offset };
   if (cohort) params.cohort = cohort;
   return realGet<LightcurveResults>("/lightcurves/results", params);

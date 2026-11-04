@@ -41,3 +41,14 @@ Owner: session faraday. Both apps built in fixture mode and screenshotted on eve
       Postgres 16 db job with migrations and the full suite, a pnpm build job).
 Gates: ruff clean; full suite on the local empty graph 0 failed; `-m "not db"` against a
 closed port all passed; `pnpm build` clean.
+- [x] F. Fixture mode covers every view now: fixtures/lightcurves.json (twenty graded TOIs across
+      the three cohorts) and fixtures/twoskies.json (targets, the congestion field, one canned
+      Kitt Peak forecast) served by the mock clients. Rendering them exposed a live bug: the
+      Follow-up "Largest operator" tile divided every payload SpaceX ever flew by the tracked LEO
+      population (~113% of LEO). The top-operators query now counts on-orbit payloads only
+      (decay_date IS NULL) and the tile reads as a share of tracked LEO, clamped at 100.
+- [x] G. vitest (3.x, the line that runs on Vite 5) with 19 unit tests over lib/format (the
+      significant-figure fmtNum), seo (route table vs App.tsx, canonical case and slash rules)
+      and States.visitorMessage; the CI web job runs them before the build.
+- [x] H. README: the site's views, the API endpoints, the MCP server that already exists (the
+      roadmap called it a later wave), and CI.
