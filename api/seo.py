@@ -148,7 +148,9 @@ def render_head(shell: str, path: str) -> tuple[str, int]:
 # crawler reads is what the route's head already says.
 
 _ROOT_DIV = re.compile(
-    r'<div id="root">(?:<div class="prerender">.*?<!-- /prerender --></div>)?</div>', re.S
+    r'<div id="root"(?P<attrs>[^>]*)>\s*(?:<div class="prerender">.*?<!-- /prerender --></div>)?'
+    r"\s*</div>",
+    re.S,
 )
 
 
@@ -170,10 +172,10 @@ def _fill_root(shell: str, title: str, description: str) -> str:
             f'<li><a href="{html.escape(pattern, quote=True)}">{html.escape(label)}</a></li>'
         )
     block = (
-        '<div id="root"><div class="prerender">'
+        '<div id="root"{attrs}><div class="prerender">'
         f"<h1>{html.escape(_heading(site, title))}</h1>"
         f"<p>{html.escape(description)}</p>"
         f'<nav aria-label="{html.escape(site, quote=True)}"><ul>{"".join(links)}</ul></nav>'
         "<!-- /prerender --></div></div>"
     )
-    return _ROOT_DIV.sub(lambda _m: block, shell, count=1)
+    return _ROOT_DIV.sub(lambda m: block.replace("{attrs}", m.group("attrs"), 1), shell, count=1)

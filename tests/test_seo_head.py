@@ -132,7 +132,8 @@ def test_served_shell_heads():
     assert _title(r.text) == "Page not found · ExoDossier"
     assert _attr(r.text, 'name="robots"', "content") == "noindex"
     assert 'rel="canonical"' not in r.text
-    assert 'id="root"' in r.text
+    # the built shell's root is filled: a Vite or index.html change that broke the match fails here
+    assert '<div class="prerender"><h1>Page not found</h1>' in r.text
 
     r = client.get("/")
     assert r.status_code == 200
@@ -189,3 +190,14 @@ def test_the_shell_hides_the_prerendered_body_while_script_runs():
     shell = (pathlib.Path(__file__).resolve().parent.parent / "web" / "index.html").read_text()
     assert re.search(r'classList\.add\("js"\)', shell)
     assert re.search(r"\.js \.prerender\s*\{\s*display:\s*none", shell)
+
+
+def test_a_root_div_with_attributes_or_whitespace_is_still_filled_and_keeps_them():
+    shell = SHELL.replace('<div id="root"></div>', '<div id="root" class="app">\n  </div>')
+    out, _ = render_head(shell, "/conflicts")
+    assert '<div id="root" class="app"><div class="prerender"><h1>Conflicts</h1>' in out
+
+
+def test_a_browser_without_modules_keeps_the_prerender():
+    shell = (pathlib.Path(__file__).resolve().parent.parent / "web" / "index.html").read_text()
+    assert re.search(r'<script nomodule>[^<]*classList\.remove\("js"\)', shell)
