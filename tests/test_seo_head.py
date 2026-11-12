@@ -147,3 +147,45 @@ def test_served_shell_heads():
     r = client.get("/api/nope")
     assert r.status_code == 404
     assert r.headers["content-type"].startswith("application/json")
+
+
+# ---- the prerendered body: crawlers that run no script read the route's heading, description
+# and links to every section; React clears it on its first render and the shell hides it while
+# script runs (api/seo.py, web/index.html).
+
+
+def _body(out: str) -> str:
+    return out[out.index('<div id="root">'):]
+
+
+def test_root_body_names_the_page_and_links_every_section_without_a_required_param():
+    out, _ = render_head(SHELL, "/")
+    body = _body(out)
+    assert "<h1>ExoDossier · Exoplanet Conflict Explorer</h1>" in body
+    links = re.findall(r'<a href="([^"]+)">', body)
+    assert links == ["/", "/search", "/conflicts", "/lightcurves", "/followup", "/about"]
+
+
+def test_a_deep_route_body_carries_its_own_heading_and_description():
+    out, status = render_head(SHELL, "/target/TOI-1836")
+    assert status == 200
+    assert "<h1>Target</h1>" in _body(out)
+    assert html.escape(match("/target/x")["description"], quote=True) in _body(out)
+
+
+def test_an_unknown_path_body_says_not_found_and_links_home():
+    out, status = render_head(SHELL, "/nope")
+    assert status == 404
+    assert "<h1>Page not found</h1>" in _body(out) and '<a href="/">' in _body(out)
+
+
+def test_the_body_is_filled_once():
+    out, _ = render_head(SHELL, "/conflicts")
+    again, _ = render_head(out, "/conflicts")
+    assert again.count('<div id="root">') == 1 and again.count('class="prerender"') == 1
+
+
+def test_the_shell_hides_the_prerendered_body_while_script_runs():
+    shell = (pathlib.Path(__file__).resolve().parent.parent / "web" / "index.html").read_text()
+    assert re.search(r'classList\.add\("js"\)', shell)
+    assert re.search(r"\.js \.prerender\s*\{\s*display:\s*none", shell)

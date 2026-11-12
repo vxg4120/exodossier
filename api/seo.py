@@ -126,6 +126,7 @@ def render_head(shell: str, path: str) -> tuple[str, int]:
     out = _set_attr(out, "meta", "property", "og:description", "content", entry["description"])
     out = _set_attr(out, "meta", "name", "twitter:title", "content", entry["title"])
     out = _set_attr(out, "meta", "name", "twitter:description", "content", entry["description"])
+    out = _fill_root(out, entry["title"], entry["description"])
     out = _ROBOTS.sub("", out)
     if canonical:
         out = _set_attr(out, "link", "rel", "canonical", "href", canonical)
@@ -137,3 +138,42 @@ def render_head(shell: str, path: str) -> tuple[str, int]:
             "</head>", '  <meta name="robots" content="noindex" data-route-meta="" />\n</head>', 1
         )
     return out, status
+
+
+# ---- body prerendering ----------------------------------------------------------------------
+# Crawlers that run no script (most AI crawlers, link unfurlers, plain HTTP readers) saw an empty
+# <div id="root">. It is filled with the route's heading, its description and a link to every
+# section a link can reach without an id. React clears the root's content on its first render,
+# and the shell hides .prerender while script runs (index.html), so people never see it; what a
+# crawler reads is what the route's head already says.
+
+_ROOT_DIV = re.compile(
+    r'<div id="root">(?:<div class="prerender">.*?<!-- /prerender --></div>)?</div>', re.S
+)
+
+
+def _heading(site: str, title: str) -> str:
+    suffix = f" · {site}"
+    return title[: -len(suffix)] if title.endswith(suffix) else title
+
+
+def _fill_root(shell: str, title: str, description: str) -> str:
+    table = load_routes()
+    site = table["site"]["name"]
+    links = []
+    for r in table["routes"]:
+        pattern = r["pattern"]
+        if pattern == "*" or r.get("noindex") or ":" in pattern:
+            continue
+        label = "Overview" if pattern == "/" else _heading(site, r["title"])
+        links.append(
+            f'<li><a href="{html.escape(pattern, quote=True)}">{html.escape(label)}</a></li>'
+        )
+    block = (
+        '<div id="root"><div class="prerender">'
+        f"<h1>{html.escape(_heading(site, title))}</h1>"
+        f"<p>{html.escape(description)}</p>"
+        f'<nav aria-label="{html.escape(site, quote=True)}"><ul>{"".join(links)}</ul></nav>'
+        "<!-- /prerender --></div></div>"
+    )
+    return _ROOT_DIV.sub(lambda _m: block, shell, count=1)

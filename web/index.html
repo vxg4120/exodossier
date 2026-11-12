@@ -126,6 +126,11 @@
        Fingerprint the public API key from its free tier. For Search Console, add
        <meta name="google-site-verification" content="TOKEN"> here once there is a token; an
        empty one is just noise in the head. -->
+  <!-- The server prerenders each route's heading, description and section links inside #root
+       for crawlers that run no script (api/seo.py); React clears it on its first render. While
+       script runs it stays hidden, so nobody sees it flash before the app paints. -->
+  <style>.js .prerender { display: none; }</style>
+  <script>document.documentElement.classList.add("js");</script>
   <script>
     (function () {
       var ids = { ga4: "", clarity: "", fingerprint: "" };
