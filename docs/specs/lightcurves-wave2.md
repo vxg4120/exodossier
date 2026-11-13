@@ -125,9 +125,11 @@ tables hold nothing.
 - [x] `scripts/build_graph.py` against a database with a graded run leaves
       `select count(*) from target` at 58 and every results row linked to a target that
       `/api/target/<candidate_id>` resolves.
-- [ ] Production shows real rows: `curl -s https://exo.vibcreates.com/api/lightcurves/summary |
+- [x] Production shows real rows: `curl -s https://exo.vibcreates.com/api/lightcurves/summary |
       jq .processed` prints a number above 0 the morning after a nightly rebuild (after 0007 is
       deployed and the pipeline is run from the laptop).
+      Checked 2026-11-13: the summary prints processed 58 (58 targets, last run 2026-10-16 08:41
+      UTC), and the results have survived every exo rebuild since then, all of which exited 0.
 
 ## Open questions
 - ~~How should results survive the nightly rebuild?~~ Decided 2026-10-16: option (a), migration
