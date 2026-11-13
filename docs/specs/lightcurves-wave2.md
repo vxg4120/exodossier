@@ -72,7 +72,8 @@ tables hold nothing.
   `last_fetch_at`, `rules{period_tolerance,snr_min,statement}`, `verdicts{code:label}`.
 - `GET /api/lightcurves/results?limit=1..200&offset>=0&sort=cohort|toi|snr|period&cohort=`:
   `{rows,total,limit,offset,sort,cohort}`; an unknown cohort is a 400, an unknown sort a 422.
-  Each row: candidate_id, name, host, tic_id, toi, cohort, stratum, tfopwg_disp, the catalog
+  Each row: candidate_id, name, host, tic_id, toi, cohort, stratum, tfopwg_disp (the answer key,
+  frozen at selection), tfopwg_disp_now (today's exofop_toi claim, display only), the catalog
   period/depth, the latest run's status and timing, `verdict`, `match` (period ratio), 
   `phase_offset`, `reason`, `best` (the matching or strongest BLS/TLS detection) and
   `single_event`.
@@ -154,3 +155,8 @@ tables hold nothing.
   `scripts/build_graph.py` run on the restored dump (62 s) left all 58 targets, 66 runs and 139
   detections in place. On unchanged raw data the rebuild hands out the same candidate ids, so
   only the test exercises the renumbered case.
+- 2026-11-13 (Claude, from the copy audit): `target.tfopwg_disp` is ExoFOP's TOI list of
+  2026-07-15 for all 58 targets, not the list current at selection, because `_BASE_POOL` keeps the
+  oldest retained raw row (`ORDER BY c.candidate_id, r.raw_id`). Two discovery TOIs (1835.02 and
+  4307.01) read PC there and CP in today's list. The answer key stays frozen, and rows now also
+  carry `tfopwg_disp_now`, which the table shows as "PC, now CP" without changing any grade.

@@ -45,7 +45,7 @@
    },
    "discovery": {
     "label": "Discovery slice",
-    "description": "Long-period (P ≥ 30 d) and single-transit planet candidates, the periodic search's blind spot. A signal here is worth a closer look, not a planet.",
+    "description": "Long-period (P ≥ 30 d) and single-transit TOIs that were planet candidates in ExoFOP's TOI list of July 15, 2026, which is the periodic search's blind spot. Where TFOPWG has changed a disposition since then, the TFOPWG column shows the current one too. A signal here is worth a closer look, not a planet.",
     "targets": 6,
     "processed": 6,
     "by_verdict": {

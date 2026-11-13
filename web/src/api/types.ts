@@ -201,7 +201,12 @@ export interface LightcurveRow {
   toi: string | null;
   cohort: LightcurveCohort;
   stratum: string | null;
+  /** The TFOPWG disposition the slice was chosen and graded against (ExoFOP's TOI list of
+      2026-07-15 for the current slice); it never changes after selection. */
   tfopwg_disp: string | null;
+  /** The disposition ExoFOP's TOI list gives today, from the graph; null when the graph has no
+      exofop_toi claim for the TOI. Optional so an older API or fixture still renders. */
+  tfopwg_disp_now?: string | null;
   canonical_disp: string | null;
   known_period_days: number | null;
   known_depth_ppm: number | null;

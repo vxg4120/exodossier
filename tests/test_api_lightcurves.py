@@ -21,7 +21,7 @@ from psycopg.rows import dict_row  # noqa: E402
 
 from api.deps import get_db  # noqa: E402
 from api.main import app  # noqa: E402
-from api.routers.lightcurves import grade  # noqa: E402
+from api.routers.lightcurves import COHORTS, grade  # noqa: E402
 
 pytestmark = pytest.mark.filterwarnings(r"ignore:Using `httpx`")
 
@@ -212,6 +212,36 @@ def test_bad_params_and_404(planted):
     one = client.get(f"/api/lightcurves/target/{planted['miss']}")
     assert one.status_code == 200 and one.json()["verdict"] == "missed"
     assert client.get("/api/lightcurves/target/-1").status_code == 404
+
+
+@pytest.mark.db
+def test_rows_carry_todays_tfopwg_disposition_beside_the_answer_key(planted, lc_db):
+    """The stored answer key never changes after selection, so a TOI that TFOPWG has confirmed
+    since reads as the old label; the row also carries today's exofop_toi claim, and the grade
+    still reads the answer key."""
+    with lc_db.cursor() as cur:
+        cur.execute("INSERT INTO ingest_run (source, endpoint, started_at, status) "
+                    "VALUES ('exofop', 'toi_csv', now(), 'ok') RETURNING ingest_run_id")
+        run = cur.fetchone()["ingest_run_id"]
+        cur.execute(
+            "INSERT INTO source_assertion (candidate_id, source_key, attribute, value, source, "
+            "observed_at, ingest_run_id) VALUES (%s, '9001.01', 'disposition', 'FP', "
+            "'exofop_toi', now(), %s)",
+            (planted["hit"], run),
+        )
+    rows = {r["toi"]: r for r in client.get("/api/lightcurves/results",
+                                            params={"limit": 50}).json()["rows"]}
+    assert (rows["9001.01"]["tfopwg_disp"], rows["9001.01"]["tfopwg_disp_now"]) == ("CP", "FP")
+    assert rows["9001.01"]["verdict"] == "recovered"  # graded against the answer key
+    assert rows["9002.01"]["tfopwg_disp_now"] is None  # no exofop_toi claim in the graph
+
+
+def test_discovery_description_dates_the_answer_key():
+    """The discovery slice was drawn from ExoFOP's July 15, 2026 list; it does not claim its TOIs
+    are planet candidates today."""
+    desc = COHORTS["discovery"]["description"]
+    assert "July 15, 2026" in desc
+    assert not desc.startswith("Long-period (P ≥ 30 d) and single-transit planet candidates")
 
 
 @pytest.mark.db
