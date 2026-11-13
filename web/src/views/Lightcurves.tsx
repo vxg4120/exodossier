@@ -250,6 +250,15 @@ function SummaryStrip({ s }: { s: LightcurveSummary }) {
   );
 }
 
+/** The TFOPWG cell: the disposition the slice was graded against, and today's when TFOPWG has
+    changed it since, so a TOI confirmed after selection never reads as a candidate still.
+    Exported for its unit test. */
+export function tfopwgLabel(r: Pick<LightcurveRow, "tfopwg_disp" | "tfopwg_disp_now">): string | null {
+  const now = r.tfopwg_disp_now;
+  if (!r.tfopwg_disp) return now ?? null;
+  return now && now !== r.tfopwg_disp ? `${r.tfopwg_disp}, now ${now}` : r.tfopwg_disp;
+}
+
 const COLUMNS: Column<LightcurveRow>[] = [
   {
     key: "target",
@@ -268,7 +277,21 @@ const COLUMNS: Column<LightcurveRow>[] = [
     ),
   },
   { key: "cohort", header: "Slice", render: (r) => COHORT_SHORT[r.cohort] ?? r.cohort },
-  { key: "disp", header: "TFOPWG", render: (r) => <Cell>{r.tfopwg_disp}</Cell> },
+  {
+    key: "disp",
+    header: "TFOPWG",
+    render: (r) => (
+      <span
+        title={
+          r.tfopwg_disp_now && r.tfopwg_disp && r.tfopwg_disp_now !== r.tfopwg_disp
+            ? `ExoFOP's TOI list of July 15, 2026, which is the answer key this slice is graded against, gave ${r.tfopwg_disp}, and today's list gives ${r.tfopwg_disp_now}.`
+            : undefined
+        }
+      >
+        <Cell>{tfopwgLabel(r)}</Cell>
+      </span>
+    ),
+  },
   {
     key: "pk",
     header: "Catalog P (d)",

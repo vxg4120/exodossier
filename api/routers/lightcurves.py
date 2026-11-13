@@ -12,6 +12,12 @@ Every row is graded with the SAME rules as the committed recovery report
 or one of its harmonics at SNR ≥ 7. The grading is a measurement against the TFOPWG answer key;
 nothing here confirms or rejects a planet.
 
+That answer key is ``target.tfopwg_disp``, the TFOPWG disposition the selection stored, which for
+every target selected on 2026-10-16 is ExoFOP's TOI list of 2026-07-15 (select_targets keeps the
+oldest retained raw row, and that load is kept as a monthly snapshot). It never changes after
+selection, so each row also carries ``tfopwg_disp_now``, the disposition ExoFOP's TOI list gives
+today, read from the graph's exofop_toi claim. It is display only and never feeds the grading.
+
 The slice is small (tens of targets, a few detections each), so both endpoints read the latest
 run per target and grade it in Python on every request; no cache is needed.
 
@@ -56,8 +62,10 @@ COHORTS: dict[str, dict[str, str]] = {
     },
     "discovery": {
         "label": "Discovery slice",
-        "description": "Long-period (P ≥ 30 d) and single-transit planet candidates, the periodic "
-        "search's blind spot. A signal here is worth a closer look, not a planet.",
+        "description": "Long-period (P ≥ 30 d) and single-transit TOIs that were planet candidates "
+        "in ExoFOP's TOI list of July 15, 2026, which is the periodic search's blind spot. Where "
+        "TFOPWG has changed a disposition since then, the TFOPWG column shows the current one too. "
+        "A signal here is worth a closer look, not a planet.",
     },
 }
 
@@ -175,6 +183,7 @@ def _load(db: psycopg.Connection, cohort: str | None = None) -> list[dict[str, A
                    t.tfopwg_disp, t.canonical_disp, t.known_period_days, t.known_epoch_bjd,
                    t.known_depth_ppm, t.known_duration_hr, t.tmag,
                    cur_c.candidate_id AS resolved_candidate_id, cur_c.name, cur_c.host,
+                   now_d.tfopwg_disp_now,
                    r.pipeline_run_id, r.status, r.n_sectors, r.baseline_days, r.runtime_s,
                    r.data_vintage, r.git_sha, r.notes, r.finished_at
             FROM target t
@@ -190,6 +199,16 @@ def _load(db: psycopg.Connection, cohort: str | None = None) -> list[dict[str, A
                 ORDER BY (s.tic_id IS NOT DISTINCT FROM t.tic_id) DESC, c.candidate_id
                 LIMIT 1
             ) cur_c ON true
+            -- Today's TFOPWG disposition for this TOI, from the newest ExoFOP load the graph was
+            -- built from. Display only: the grading reads the stored answer key above.
+            LEFT JOIN LATERAL (
+                SELECT sa.value AS tfopwg_disp_now
+                FROM source_assertion sa
+                WHERE sa.source = 'exofop_toi' AND sa.source_key = t.toi
+                  AND sa.attribute = 'disposition'
+                ORDER BY sa.observed_at DESC, sa.assertion_id DESC
+                LIMIT 1
+            ) now_d ON true
             LEFT JOIN LATERAL (
                 SELECT * FROM pipeline_run pr WHERE pr.target_id = t.target_id
                 ORDER BY pr.pipeline_run_id DESC LIMIT 1
@@ -230,6 +249,7 @@ def _load(db: psycopg.Connection, cohort: str | None = None) -> list[dict[str, A
                 "cohort": t["cohort"],
                 "stratum": t["stratum"],
                 "tfopwg_disp": t["tfopwg_disp"],
+                "tfopwg_disp_now": t["tfopwg_disp_now"],
                 "canonical_disp": t["canonical_disp"],
                 "known_period_days": _f(t["known_period_days"]),
                 "known_depth_ppm": _f(t["known_depth_ppm"]),

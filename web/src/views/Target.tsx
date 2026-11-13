@@ -35,6 +35,17 @@ function siblingSummary(siblings: Sibling[]): string {
     .join(" · ");
 }
 
+/** The Follow-up hand-off for a candidate's host. The forecaster's warning says the catalogs
+    disagree on disposition, so the flag travels only with a disposition conflict, never with a
+    disagreement on radius or another attribute. Exported for its unit test. */
+export function followupHref(
+  star: { ra_deg: number; dec_deg: number; name: string },
+  conflictAttributes: string[],
+): string {
+  const flag = conflictAttributes.includes("disposition") ? "&conflict=1" : "";
+  return `/followup?ra=${star.ra_deg}&dec=${star.dec_deg}&name=${encodeURIComponent(star.name)}${flag}`;
+}
+
 export function Target() {
   const { id = "" } = useParams<{ id: string }>();
   const detail = useApi<TargetDetail>(() => getTarget(id), [id]);
@@ -105,9 +116,10 @@ function TargetCard({ detail }: { detail: TargetDetail }) {
 
       {star.ra_deg != null && star.dec_deg != null ? (
         <Link
-          to={`/followup?ra=${star.ra_deg}&dec=${star.dec_deg}&name=${encodeURIComponent(
-            star.name,
-          )}${nConflict > 0 ? "&conflict=1" : ""}`}
+          to={followupHref(
+            { ra_deg: star.ra_deg, dec_deg: star.dec_deg, name: star.name },
+            detail.conflict_attributes,
+          )}
           className="followup-link"
         >
           Check follow-up passes — which satellites cross this sightline when you observe it ›

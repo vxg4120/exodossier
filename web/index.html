@@ -27,7 +27,7 @@
     <meta property="og:image" content="https://exo.vibcreates.com/og.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
-    <meta property="og:image:alt" content="The ExoDossier overview page with its live catalog counts." />
+    <meta property="og:image:alt" content="The ExoDossier overview page, showing its catalog counts on the day the image was captured." />
 
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="ExoDossier · Exoplanet Conflict Explorer" />
@@ -59,14 +59,19 @@
           "@type": "Dataset",
           "@id": "https://exo.vibcreates.com/#dataset",
           "name": "ExoDossier exoplanet identity graph",
-          "description": "One resolved record per host star and candidate, stitched from the NASA Exoplanet Archive, ExoFOP and the Kepler KOI table, with every source assertion kept alongside its provenance and the cross-source conflicts in disposition, planet radius and host temperature computed from them. The catalog is read-only and recomputed as the archives refresh.",
+          "description": "One resolved record per host star and candidate, stitched from the NASA Exoplanet Archive, ExoFOP and the Kepler KOI table, with every source assertion kept alongside its provenance and the cross-source conflicts in disposition, planet radius and host temperature computed from them. The catalog is read-only and recomputed as the archives refresh. The source values come from their archives and are reused under each archive's public-use terms, and only ExoDossier's own code and derived outputs are MIT-licensed.",
           "url": "https://exo.vibcreates.com/",
           "creator": { "@id": "https://vibcreates.com/#vib" },
           "isAccessibleForFree": true,
-          "license": "https://opensource.org/licenses/MIT",
+          "license": {
+            "@type": "CreativeWork",
+            "name": "The source values come from their archives and are reused under each archive's public-use terms, and only ExoDossier's own code and derived outputs are MIT-licensed.",
+            "url": "https://github.com/vxg4120/exodossier/blob/main/LICENSING.md"
+          },
           "isBasedOn": [
             "https://exoplanetarchive.ipac.caltech.edu/",
-            "https://exofop.ipac.caltech.edu/"
+            "https://exofop.ipac.caltech.edu/",
+            "https://archive.stsci.edu/"
           ],
           "keywords": [
             "exoplanet",

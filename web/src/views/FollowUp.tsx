@@ -193,7 +193,7 @@ export function FollowUp() {
         <Async state={congestion} loadingLabel="Loading congestion field">
           {(c) => {
             const spacex = c.top_operators.find((o) => /spacex/i.test(o.operator));
-            // on-orbit payloads against the tracked LEO population: a share, so never over 100
+            // on-orbit payloads against the active satellites in LEO: a share, so never over 100
             const spacexPct =
               spacex && c.leo_objects > 0
                 ? Math.min(100, Math.round((100 * spacex.payloads) / c.leo_objects))
@@ -205,7 +205,7 @@ export function FollowUp() {
                   <StatTile
                     lead
                     hero
-                    label="LEO tracked objects"
+                    label="Active satellites in LEO"
                     value={c.leo_objects}
                     sub={
                       <>
@@ -231,8 +231,8 @@ export function FollowUp() {
                     sub={
                       spacexPct !== null ? (
                         <>
-                          SpaceX payloads on orbit · ~<span className="num">{spacexPct}%</span> of
-                          tracked LEO
+                          SpaceX payloads on orbit, about <span className="num">{spacexPct}%</span>{" "}
+                          of the active satellites in LEO
                         </>
                       ) : (
                         "payloads on orbit"
@@ -273,8 +273,8 @@ export function FollowUp() {
                         ))}
                     </div>
                     <p className="hint">
-                      Objects per ~200 km altitude band. The occupied shells are where follow-up
-                      exposures collect streaks.
+                      Active satellites per ~200 km altitude band. The occupied shells are where
+                      follow-up exposures collect streaks.
                     </p>
                   </div>
                   <div>
@@ -299,9 +299,11 @@ export function FollowUp() {
               TFOP network and wide surveys that confirm TESS candidates from Earth.
             </li>
             <li>
-              <strong>Positions are approximate.</strong> Element sets are up to ~1 week old, so
-              propagated positions drift by arcminutes-to-degrees. Good for &ldquo;roughly which
-              objects cross this patch of sky,&rdquo; not collision-grade.
+              <strong>Positions are approximate.</strong> The element sets are refreshed from
+              CelesTrak twice a day and from Space-Track once a day, and most were fitted within the
+              last day or two. Each one is still propagated forward from its own epoch, so positions
+              drift by arcminutes to degrees. They are good for &ldquo;roughly which objects cross
+              this patch of sky,&rdquo; not for collision-grade work.
             </li>
             <li>
               Only LEO payloads are propagated; frames are approximate (no precession/refraction). A
