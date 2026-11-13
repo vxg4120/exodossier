@@ -3,7 +3,8 @@ import { Link } from "react-router-dom";
 import { getStats } from "../api/client";
 
 /** The plate's edge-notes: every view closes under a double rule with the record's provenance
- *  in one engraved line: freshest pull, the archives the data belongs to, the correction
+ *  in one engraved line: freshest pull, the archives the data belongs to (the exoplanet archives
+ *  and MAST, then the satellite catalogs that Follow-up reads through Orbital), the correction
  *  channel. A colophon rather than a footer, as on orbital. */
 export function Colophon() {
   const [refreshed, setRefreshed] = useState<string | null>(null);
@@ -42,6 +43,24 @@ export function Colophon() {
         ·{" "}
         <a href="https://exofop.ipac.caltech.edu/tess/" target="_blank" rel="noreferrer">
           ExoFOP-TESS
+        </a>{" "}
+        ·{" "}
+        <a href="https://archive.stsci.edu/" target="_blank" rel="noreferrer">
+          MAST
+        </a>
+      </span>
+      <span>
+        satellites:{" "}
+        <a href="https://celestrak.org/" target="_blank" rel="noreferrer">
+          CelesTrak
+        </a>{" "}
+        ·{" "}
+        <a href="https://www.space-track.org/" target="_blank" rel="noreferrer">
+          Space-Track
+        </a>{" "}
+        ·{" "}
+        <a href="https://planet4589.org/space/gcat/" target="_blank" rel="noreferrer">
+          GCAT
         </a>
       </span>
       <span>

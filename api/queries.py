@@ -9,7 +9,8 @@ Tables read (identity + conflict graph only): star, candidate, entity_identifier
 source_assertion, merge_log, disposition_mapping, ingest_run. Nothing here writes, and nothing
 here touches the Wave-2 light-curve tables.
 
-Conflict semantics (honest + reproducible against docs/reports/conflict_report.md):
+Conflict semantics (docs/reports/conflict_report.md, the frozen v0 report, used the same
+thresholds, but it grouped raw rows and predates the identity guard below, so its counts differ):
   * disposition — a candidate whose per-source dispositions map (via disposition_mapping, exact) to
     >= 2 distinct canonical values. The "dramatic" kind pairs FALSE_POSITIVE with CONFIRMED/KNOWN.
   * numeric (period/radius/teff/rstar/…) — a cross-source disagreement: >= 2 distinct values AND
@@ -41,7 +42,7 @@ DISPOSITIONS = ["CONFIRMED", "KNOWN_PLANET", "CANDIDATE", "AMBIGUOUS", "FALSE_PO
 # Per-attribute metadata: the star- vs candidate-level split, display unit, and the relative-spread
 # threshold above which a cross-source numeric disagreement counts as a conflict. ``None`` threshold
 # = shown in the who-says-what table but never flagged (e.g. epoch, where differing references are
-# expected). Thresholds for period/radius/teff/rstar track the conflict report's headline counts.
+# expected). The period, radius and teff thresholds match the ones the v0 conflict report used.
 ATTRIBUTES: dict[str, dict[str, Any]] = {
     # candidate-level
     "disposition": {"level": "candidate", "unit": None, "kind": "disposition"},
@@ -970,17 +971,60 @@ def attribution() -> dict[str, Any]:
             {
                 "name": "TESS Mission",
                 "operator": "NASA / MIT",
-                "used_for": "TESS produced the TOI/CTOI candidates this catalog reconciles.",
+                "used_for": "TESS produced the TOI and CTOI candidates this catalog reconciles, "
+                            "and its light curves (SPOC, TESS-SPOC and QLP) are what the "
+                            "light-curve check searches.",
                 "url": "https://tess.mit.edu/",
                 "citation": (
                     "Funding for TESS is provided by NASA's Science Mission Directorate."
+                ),
+            },
+            {
+                # MAST's own TESS acknowledgement, from
+                # https://archive.stsci.edu/publishing/mission-acknowledgements (read 2026-11-13).
+                # The page writes the contract number with an en dash; it is a hyphen here.
+                "name": "MAST",
+                "operator": "Mikulski Archive for Space Telescopes, Space Telescope Science "
+                            "Institute (STScI)",
+                "used_for": "The TESS light curves (SPOC, TESS-SPOC and QLP) that the light-curve "
+                            "check downloads and searches.",
+                "url": "https://archive.stsci.edu/",
+                "citation": (
+                    "This paper includes data collected with the TESS mission, obtained from the "
+                    "MAST data archive at the Space Telescope Science Institute (STScI). Funding "
+                    "for US Institutions for the TESS mission is provided by the NASA Explorer "
+                    "Program. STScI is operated by the Association of Universities for Research "
+                    "in Astronomy, Inc., under NASA contract NAS5-26555."
+                ),
+            },
+            {
+                # ExoDossier loads no satellite data itself: api/routers/twoskies.py reads the oei
+                # graph. CelesTrak publishes no acknowledgement wording of its own, so it is
+                # credited by name; GCAT's short citation is the one its page asks for
+                # (https://planet4589.org/space/gcat, read 2026-11-13).
+                "name": "CelesTrak, Space-Track and GCAT",
+                "operator": "Dr. T.S. Kelso (CelesTrak), the Space-Track service and Jonathan C. "
+                            "McDowell (GCAT), read through Orbital Economy Intelligence",
+                "used_for": "The follow-up line-of-sight tool reads the satellite catalog, the "
+                            "element sets and the owners from Orbital Economy Intelligence, which "
+                            "builds them from CelesTrak's satellite catalog and element sets, "
+                            "Space-Track's element-set history and Jonathan McDowell's GCAT.",
+                "url": "https://orbital.vibcreates.com/",
+                "citation": (
+                    "Satellite catalog and element-set data from CelesTrak (celestrak.org), "
+                    "maintained by Dr. T.S. Kelso, and from Space-Track (space-track.org). "
+                    "Owner data draws on GCAT: McDowell, J, 2020: General Catalog of Artificial "
+                    "Space Objects, https://planet4589.org/space/gcat."
                 ),
             },
         ],
         "notes": (
             "Disposition vocabularies are mapped to a canonical taxonomy (CONFIRMED, KNOWN_PLANET, "
             "CANDIDATE, AMBIGUOUS, FALSE_POSITIVE) per db/migrations disposition_mapping. Conflict "
-            "counts are recomputed live from the identity graph and track the v0 conflict report."
+            "counts are recomputed live from the identity graph, so they change as the catalogs "
+            "refresh and no longer match the figures in the frozen v0 conflict report of July 15, "
+            "2026. The live counts also count each planet or host once where the graph holds "
+            "duplicate rows, which that report did not do."
         ),
     }
 

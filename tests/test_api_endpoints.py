@@ -112,5 +112,6 @@ def test_attribution_lists_sources():
     names = {s["name"] for s in r.json()["sources"]}
     assert "NASA Exoplanet Archive" in names
     assert "ExoFOP-TESS" in names
+    assert "MAST" in names
     # honest framing is present
     assert "does not adjudicate" in r.json()["summary"].lower()
