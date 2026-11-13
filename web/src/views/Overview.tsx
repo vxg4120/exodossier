@@ -4,7 +4,7 @@ import { getConflicts, getStats, getStories } from "../api/client";
 import type { ConflictRow, IngestRun, NewPlanet, PlanetRecord, Stats, Stories, VerdictWindow } from "../api/types";
 import { useApi } from "../hooks/useApi";
 import { DASH, fmtDate, fmtInt, fmtNum } from "../lib/format";
-import { CONFLICT_TABS } from "../lib/conflicts";
+import { CONFLICT_TABS, dramaticCounterpart } from "../lib/conflicts";
 import { runStatusMeta } from "../lib/dispositions";
 import {
   awaitingVerdict,
@@ -88,15 +88,15 @@ export function Overview() {
                     ? "No dramatic cases"
                     : `The dramatic ${fmtInt(cat.conflicts.disposition_dramatic)}`
                 }
-                meta="FALSE POSITIVE vs CONFIRMED"
+                meta="FALSE POSITIVE vs CONFIRMED or KNOWN PLANET"
                 dataTour="dramatic"
               >
                 <p className="story__headline">
                   {cat.conflicts.disposition_dramatic === 0
-                    ? "No candidate is confirmed by one catalog and called a false positive by another right now."
+                    ? "No candidate is listed as a confirmed or known planet by one catalog and as a false positive by another right now."
                     : cat.conflicts.disposition_dramatic === 1
-                      ? "One candidate is confirmed by one catalog and called a false positive by another."
-                      : `${fmtInt(cat.conflicts.disposition_dramatic)} candidates are confirmed by one catalog and called false positives by another.`}
+                      ? "One candidate is listed as a confirmed or known planet by one catalog and as a false positive by another."
+                      : `${fmtInt(cat.conflicts.disposition_dramatic)} candidates are listed as a confirmed or known planet by one catalog and as a false positive by another.`}
                 </p>
                 <Async state={dramatic} loadingLabel="Loading the dramatic cases" loadingRows={3}>
                   {(page) => (
@@ -139,7 +139,7 @@ export function Overview() {
               <StatTile
                 label="Source assertions"
                 value={cat.source_assertions}
-                sub="per-publication provenance"
+                sub="provenance per source, with the publication for the Archive's per-publication rows"
               />
               <StatTile
                 conflict
@@ -148,7 +148,7 @@ export function Overview() {
                 sub={
                   <>
                     incl. <span className="num">{cat.conflicts.disposition_dramatic}</span> FALSE
-                    POSITIVE vs CONFIRMED
+                    POSITIVE vs CONFIRMED or KNOWN PLANET
                   </>
                 }
               />
@@ -672,7 +672,7 @@ function DisagreePanel({ s }: { s: Stats }) {
 function DramaticList({ rows, total }: { rows: ConflictRow[]; total: number }) {
   const shown = rows.filter((r) => r.dramatic);
   if (shown.length === 0) {
-    return <p className="hint">No FALSE POSITIVE vs CONFIRMED case in the current graph.</p>;
+    return <p className="hint">No FALSE POSITIVE vs CONFIRMED or KNOWN PLANET case in the current graph.</p>;
   }
   return (
     <div className="stack stack--sm">
@@ -681,7 +681,7 @@ function DramaticList({ rows, total }: { rows: ConflictRow[]; total: number }) {
           <span className="assert-val mono-hi">{r.target}</span>
           <span className="badge badge--conflict">
             <span className="badge__glyph" aria-hidden="true" />
-            FP vs CONFIRMED
+            FP vs {dramaticCounterpart(r.dispositions)}
           </span>
         </Link>
       ))}

@@ -57,7 +57,8 @@ def _ro_db() -> Iterator[psycopg.Connection]:
 @mcp.tool()
 def catalog_stats() -> dict[str, Any]:
     """Graph totals (stars, candidates, crosswalk identifiers, source assertions) and the
-    cross-source conflict counts (disposition, dramatic FALSE_POSITIVE-vs-CONFIRMED, radius, Teff),
+    cross-source conflict counts (disposition, the dramatic FALSE_POSITIVE vs CONFIRMED or
+    KNOWN_PLANET kind, radius, Teff),
     plus the ingestion ledger."""
     with _ro_db() as db:
         return queries.catalog_stats(db)

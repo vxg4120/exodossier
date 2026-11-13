@@ -9,7 +9,7 @@ import type {
 } from "../api/types";
 import { useApi } from "../hooks/useApi";
 import { fmtInt, fmtNum } from "../lib/format";
-import { CONFLICT_TABS, toConflictTab } from "../lib/conflicts";
+import { CONFLICT_TABS, dramaticCounterpart, toConflictTab } from "../lib/conflicts";
 import { dispositionMeta } from "../lib/dispositions";
 import { Panel } from "../components/Panel";
 import { DataTable, Pager, pastTheEnd, type Column } from "../components/DataTable";
@@ -173,7 +173,7 @@ const DISPOSITION_COLS: Column<ConflictRow>[] = [
       r.dramatic ? (
         <span className="badge badge--conflict">
           <span className="badge__glyph" aria-hidden="true" />
-          FP vs confirmed
+          FP vs {dramaticCounterpart(r.dispositions).toLowerCase()}
         </span>
       ) : null,
   },

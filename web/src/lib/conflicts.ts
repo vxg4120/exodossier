@@ -52,3 +52,13 @@ export function toConflictTab(raw: string | null): ConflictType {
   if (raw === "radius" || raw === "teff") return raw;
   return "disposition";
 }
+
+/** The planet side of a dramatic row, in upper case. The dramatic kind pairs a FALSE POSITIVE
+    with a CONFIRMED or a KNOWN PLANET claim, and the two are separate values in the taxonomy, so
+    a row names the one its sources actually make: CONFIRMED when any source says so, otherwise
+    KNOWN PLANET. A row without its dispositions names both. */
+export function dramaticCounterpart(dispositions: string[] | undefined): string {
+  if (dispositions?.includes("CONFIRMED")) return "CONFIRMED";
+  if (dispositions?.includes("KNOWN_PLANET")) return "KNOWN PLANET";
+  return "CONFIRMED or KNOWN PLANET";
+}

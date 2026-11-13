@@ -32,7 +32,7 @@ const STEPS: DriveStep[] = [
     popover: {
       title: "The sharpest disagreements",
       description:
-        "Planets one catalog confirms and another calls a false positive — the starkest form of “nobody agrees on a planet.” Click one to see who said what.",
+        "Candidates that one catalog lists as a confirmed or known planet and another calls a false positive, which is the starkest form of “nobody agrees on a planet.” Click one to see who said what.",
       side: "left",
       align: "start",
     },
@@ -42,7 +42,7 @@ const STEPS: DriveStep[] = [
     popover: {
       title: "Where to go",
       description:
-        "Search finds any star or candidate · Conflicts lists every archive disagreement · Follow-up checks it against tonight's sky.",
+        "Search finds any star or candidate · Conflicts lists where the archives disagree on disposition, planet radius and host temperature · Follow-up checks it against tonight's sky.",
       side: "right",
       align: "start",
     },
