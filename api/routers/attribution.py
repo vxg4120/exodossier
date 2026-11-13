@@ -1,4 +1,5 @@
-"""GET /api/attribution -- NASA Exoplanet Archive + ExoFOP + TESS citations and honest framing."""
+"""GET /api/attribution -- the citations for every source the site serves (the NASA Exoplanet
+Archive, ExoFOP, TESS, MAST, and the satellite catalogs behind Follow-up) and the honest framing."""
 
 from fastapi import APIRouter
 

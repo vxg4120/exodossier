@@ -27,7 +27,7 @@
       "pattern": "/conflicts",
       "end": true,
       "title": "Conflicts · ExoDossier",
-      "description": "Every cross-source disagreement in the catalog, where ExoFOP, the NASA TOI table, the Kepler KOI table and the Archive's per-publication and composite tables describe the same star or candidate differently."
+      "description": "This page lists the candidates and host stars whose sources disagree on disposition, on planet radius by more than 10 percent, or on host temperature by more than 5 percent, as ExoFOP, the NASA TOI table, the Kepler KOI table and the Archive's per-publication and composite tables describe them."
     },
     {
       "pattern": "/lightcurves",
