@@ -1,7 +1,7 @@
 [project]
 name = "exodossier"
 version = "0.1.0"
-description = "The evidence-synthesis layer for exoplanet discovery: a provenance-tracked identity graph reconciling the catalogs (TIC/TOI/CTOI/KOI/EPIC/Gaia) that disagree about the same stars and planets."
+description = "The evidence-synthesis layer for exoplanet discovery: a provenance-tracked identity graph reconciling the NASA Exoplanet Archive and ExoFOP, which disagree about the same stars and planets, across TIC, TOI, CTOI and KOI identifiers."
 requires-python = ">=3.12"
 
 [tool.pytest.ini_options]

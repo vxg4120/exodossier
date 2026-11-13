@@ -5,9 +5,8 @@ the ExoDossier identity graph and its cross-source conflict findings. Point an M
 Desktop, an agent framework, etc.) at it and ask questions like *"does anyone disagree about whether
 TOI-1836 is a planet?"* — the model gets clean JSON with full provenance.
 
-This is, as far as we could verify, the **first exoplanet MCP server**. It surfaces where the
-NASA Exoplanet Archive and ExoFOP disagree about the same star or candidate — with provenance — and
-**does not adjudicate or confirm**.
+It surfaces where the NASA Exoplanet Archive and ExoFOP disagree about the same star or candidate,
+with the provenance of each value, and it **does not adjudicate or confirm**.
 
 ## Tools (all read-only)
 

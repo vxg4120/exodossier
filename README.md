@@ -1,8 +1,9 @@
 # ExoDossier
 
 **The evidence-synthesis layer for exoplanet discovery: a provenance-tracked identity graph that
-reconciles the catalogs (TIC / TOI / CTOI / KOI / EPIC / Gaia) which disagree about the same stars
-and planets — feeding both candidate vetting and JWST/HWO target re-ranking.**
+reconciles the NASA Exoplanet Archive and ExoFOP, which disagree about the same stars and planets,
+across TIC, TOI, CTOI and KOI identifiers, with Gaia DR3, HD and HIP names attached as
+cross-identifiers. It feeds both candidate vetting and JWST/HWO target re-ranking.**
 
 Everyone treats exoplanet catalogs as physics. This project treats them as a master-data problem.
 The same star is a TIC number, a TOI, a CTOI, a KOI, an EPIC id, a Gaia DR3 source, an HD name — and

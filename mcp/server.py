@@ -2,8 +2,8 @@
 
 A read-only Model Context Protocol server exposing the same identity-graph + conflict queries as
 the HTTP API (it imports ``api.queries``, so the API, the web catalog and the agent tools can never
-disagree). Verified novel: no exoplanet MCP server existed when this was built. It surfaces where
-the archives disagree, with provenance — it does not adjudicate or confirm.
+disagree). It surfaces where the archives disagree, with provenance, and it does not adjudicate or
+confirm.
 
 Tools (all read-only):
   * catalog_stats()                    -> graph totals + cross-source conflict counts
