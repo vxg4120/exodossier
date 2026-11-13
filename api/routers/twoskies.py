@@ -10,9 +10,11 @@ The honest science (framed everywhere, never overclaimed):
   * TESS itself is largely immune. TESS observes from a high lunar-resonant orbit far above LEO;
     megaconstellations do not streak its frames. The real contamination target is GROUND-BASED
     follow-up -- the TFOP network and wide-field surveys that confirm TESS candidates from Earth.
-  * Positions are ILLUSTRATIVE. The satellite element sets are up to ~1 week old, so propagated
-    positions carry along-track error of many km (arcminutes-to-degrees on the sky). This answers
-    "roughly which objects sweep this patch of sky", not operational, collision-grade questions.
+  * Positions are ILLUSTRATIVE. The element sets are refreshed from CelesTrak twice a day and from
+    Space-Track once a day, and most have an epoch within the last day or two, but each one is
+    propagated forward from its own epoch, so positions carry along-track error of many km
+    (arcminutes to degrees on the sky). This answers "roughly which objects sweep this patch of
+    sky", not operational, collision-grade questions. Objects with a recorded decay are left out.
   * Frames are approximate: TEME is treated as inertial (no precession/nutation), no refraction.
 
 Three endpoints:
@@ -34,6 +36,7 @@ import math
 import threading
 import time
 from collections import Counter
+from collections.abc import Container
 from contextlib import contextmanager
 from typing import Annotated
 
@@ -44,6 +47,7 @@ from sgp4.api import WGS72, Satrec, SatrecArray
 
 from api.cache import RefreshingCache
 from api.deps import get_db, get_oei_db
+from api.queries import _DISPO_CTE
 
 router = APIRouter(prefix="/twoskies", tags=["twoskies"])
 log = logging.getLogger("twoskies")
@@ -60,9 +64,11 @@ CAVEATS = [
     "TESS itself is largely immune: it observes from a high lunar-resonant orbit far above LEO, so "
     "megaconstellations do not streak its frames. The contamination risk is to GROUND-BASED "
     "follow-up -- the TFOP network and wide-field surveys that confirm TESS candidates from Earth.",
-    "Positions are ILLUSTRATIVE, not operational. The satellite element sets are ~1 week old; "
-    "propagated positions carry along-track error of many kilometres (arcminutes-to-degrees on the "
-    "sky). Good for 'roughly which objects cross this sky patch', not collision-grade avoidance.",
+    "Positions are ILLUSTRATIVE, not operational. The satellite element sets are refreshed from "
+    "CelesTrak twice a day and from Space-Track once a day, and most have an epoch within the "
+    "last day or two. Each set is propagated forward from its own epoch, so positions carry "
+    "along-track error of many kilometres, which is arcminutes to degrees on the sky. They are "
+    "good for roughly which objects cross this patch of sky, not for collision-grade avoidance.",
     "Only LEO payloads are propagated (the streak/interference source). Coordinate frames are "
     "approximate -- TEME treated as inertial, no precession/nutation/refraction correction.",
 ]
@@ -97,11 +103,24 @@ FAMOUS_HOSTS = [
 
 # ---------------------------------------------------------------------------------------------
 # Exoplanet-target queries (read-only, `exo` -- ExoDossier's OWN graph, so this is just get_db).
-# Only the identity tables star + candidate are read; a host's conflict flag is the presence of an
-# AMBIGUOUS-disposition candidate -- the resolved stand-in for "the source catalogs disagree about
-# whether this is a real planet" (the ExoDossier conflict layer). Aggregation collapses each host to
-# one sky point.
+# The targets come from the identity tables star + candidate, and a host's conflict flag comes
+# from the disposition conflict corpus: one of its candidates has sources that map to two or more
+# distinct canonical dispositions, which is the same set /conflicts lists and /api/stats counts.
+# A resolved AMBIGUOUS disposition is not that. It is the winning claim under the precedence
+# policy, and on 2026-11-13 every one of them came from a TFOPWG "APC" label that the sources
+# agreed on. Aggregation collapses each host to one sky point.
 # ---------------------------------------------------------------------------------------------
+# Every candidate row in a disposition conflict, twins included: the corpus groups twin rows under
+# one identity (``eid``), and this expands each group back to the candidate rows a host holds.
+_CONFLICTED_CANDIDATES_SQL = (
+    _DISPO_CTE
+    + """
+SELECT ci.candidate_id, cf.dramatic
+FROM candidate_identity ci
+JOIN conflicted cf ON cf.eid = ci.eid
+"""
+)
+
 _TARGETS_SQL = """
 SELECT
     s.star_id,
@@ -120,19 +139,24 @@ WHERE s.ra_deg IS NOT NULL AND s.dec_deg IS NOT NULL
 GROUP BY s.star_id, s.canonical_name, s.tic_id, s.ra_deg, s.dec_deg
 """
 
-# Representative disposition per host: best-known planet wins the label; AMBIGUOUS marks a conflict.
+# Representative disposition per host: the best-known planet wins the label.
 _DISP_RANK = {
     "CONFIRMED": 0, "KNOWN_PLANET": 1, "CANDIDATE": 2, "AMBIGUOUS": 3, "FALSE_POSITIVE": 4,
 }
 
 
-def _reduce_target(row: dict, category: str) -> dict:
+def _reduce_target(row: dict, category: str, conflicted: Container[int] = frozenset()) -> dict:
+    """One sky point per host. ``conflicted`` holds the candidate ids in the disposition conflict
+    corpus; a host is flagged when it holds one, and then the representative is chosen among those
+    candidates, so "view dossier" opens a page that shows the disagreement the flag reports."""
     names = row["candidate_names"]
     disps = [d or "UNKNOWN" for d in row["dispositions"]]
     ids = row["candidate_ids"]
-    has_conflict = any(d == "AMBIGUOUS" for d in disps)
+    flagged = [i for i in range(len(ids)) if ids[i] in conflicted]
+    has_conflict = bool(flagged)
     # pick the representative (planet name, disposition) by best rank, ties by name order.
-    best_i = min(range(len(names)), key=lambda i: (_DISP_RANK.get(disps[i], 9), names[i]))
+    pool = flagged or range(len(names))
+    best_i = min(pool, key=lambda i: (_DISP_RANK.get(disps[i], 9), names[i]))
     return {
         "candidate_id": ids[best_i],
         "candidate": names[best_i],
@@ -155,11 +179,16 @@ def targets(
     """Curated exoplanet host stars with sky coordinates for the line-of-sight forecaster.
 
     Reads ExoDossier's OWN ``exo`` graph (star/candidate). Returns the famous benchmark systems plus
-    a slice of conflict-flagged hosts (a candidate with an AMBIGUOUS/disputed disposition). One row
-    per host (a single sky point); ``has_conflict`` flags the ones where the source catalogs
-    disagree about whether it is even a planet.
+    a slice of conflict-flagged hosts, which are hosts with a candidate whose sources map to two or
+    more distinct canonical dispositions. The slice lists the dramatic kind first (a FALSE
+    POSITIVE against a CONFIRMED or KNOWN PLANET), then the rest by host name. One row per host (a
+    single sky point); ``has_conflict`` flags every host, famous or not, whose catalogs disagree on
+    a candidate's disposition.
     """
     with db.cursor() as cur:
+        cur.execute(_CONFLICTED_CANDIDATES_SQL)
+        dramatic_of = {r["candidate_id"]: r["dramatic"] for r in cur.fetchall()}
+
         cur.execute(
             _TARGETS_SQL.format(where="s.canonical_name = ANY(%(names)s)"),
             {"names": FAMOUS_HOSTS},
@@ -169,27 +198,32 @@ def targets(
         cur.execute(
             _TARGETS_SQL.format(
                 where="s.star_id IN "
-                "(SELECT star_id FROM candidate WHERE disposition = 'AMBIGUOUS') "
+                "(SELECT star_id FROM candidate WHERE candidate_id = ANY(%(conflicted)s)) "
                 "AND s.canonical_name <> ALL(%(names)s)"
             ),
-            {"names": FAMOUS_HOSTS},
+            {"names": FAMOUS_HOSTS, "conflicted": list(dramatic_of)},
         )
         conflict_rows = cur.fetchall()
 
+    def dramatic_first(r: dict) -> tuple[bool, str]:
+        return (not any(dramatic_of.get(i, False) for i in r["candidate_ids"]), r["host"])
+
     famous = sorted(
-        (_reduce_target(r, "famous") for r in famous_rows), key=lambda t: t["host"]
+        (_reduce_target(r, "famous", dramatic_of) for r in famous_rows), key=lambda t: t["host"]
     )
-    conflict = sorted(
-        (_reduce_target(r, "conflict") for r in conflict_rows), key=lambda t: t["host"]
-    )[:conflict_limit]
+    conflict = [
+        _reduce_target(r, "conflict", dramatic_of)
+        for r in sorted(conflict_rows, key=dramatic_first)[:conflict_limit]
+    ]
 
     targets = famous + conflict
     return {
         "targets": targets,
         "n_famous": len(famous),
         "n_conflict": len(conflict),
-        "note": "has_conflict = the host has a candidate with a disputed/AMBIGUOUS disposition "
-        "(source catalogs disagree). Coordinates are ICRS from the exo star table.",
+        "note": "has_conflict marks a host with a candidate whose sources map to two or more "
+        "distinct canonical dispositions, which are the disposition conflicts that /conflicts "
+        "lists. Coordinates are ICRS from the exo star table.",
     }
 
 
@@ -199,16 +233,33 @@ def targets(
 # operator concentration that drives the interference story. ``_CONGESTION_SQL`` is inlined here
 # (ExoDossier has no satellite congestion router of its own).
 # ---------------------------------------------------------------------------------------------
-_CONGESTION_SQL = """
-WITH latest_elements AS (
-    -- Current positions only: the celestrak_gp snapshot (~32k rows), NOT the 9.7M-row
-    -- spacetrack_gp_history backfill. "Where are objects now" needs the current source; scanning
-    -- full history here cost ~15s.
-    SELECT DISTINCT ON (norad_id) norad_id, perigee_km, apogee_km, inclination
+# The live objects on CelesTrak's active list, shared by the panel's bins and its tracked count.
+# Current positions only: the latest celestrak_gp element set per NORAD id, NOT the 9.7M-row
+# spacetrack_gp_history backfill, because "where are objects now" needs the current source and
+# scanning full history here cost ~15s. The celestrak_gp slice keeps every pull since July 2026,
+# so it still holds the last element set of every object that has since re-entered or dropped off
+# the active list. Objects with a recorded decay are left out (as in _TOP_OPERATORS_SQL), and so
+# are element sets more than 30 days older than the newest one. That window is measured against
+# the data, not now(), so an old copy of the database still answers.
+_LIVE_ELEMENTS_CTE = """
+WITH latest AS (
+    SELECT DISTINCT ON (norad_id) norad_id, epoch, perigee_km, apogee_km, inclination
     FROM gp_elements
     WHERE source = 'celestrak_gp'
     ORDER BY norad_id, epoch DESC
+),
+latest_elements AS (
+    SELECT l.norad_id, l.perigee_km, l.apogee_km, l.inclination
+    FROM latest l
+    WHERE l.epoch > (SELECT max(epoch) FROM latest) - interval '30 days'
+      AND NOT EXISTS (
+          SELECT 1 FROM satellite s
+          WHERE s.norad_id = l.norad_id AND s.decay_date IS NOT NULL
+      )
 )
+"""
+
+_CONGESTION_SQL = _LIVE_ELEMENTS_CTE + """
 SELECT
     (floor(((apogee_km + perigee_km) / 2.0) / 50.0) * 50)::int AS alt_bin_km,
     (floor(inclination / 5.0) * 5)::int AS inc_bin_deg,
@@ -225,10 +276,8 @@ ORDER BY 1, 2
 # only an ingest changes them. The catalog total and the launch windows are cheap counts over
 # satellite, and the windows roll over at midnight with no ingest at all. So only the first group
 # is cached, and the second is read fresh on every request.
-_TRACKED_SQL = """
-SELECT count(DISTINCT norad_id) AS tracked_with_elements
-FROM gp_elements
-WHERE source = 'celestrak_gp'
+_TRACKED_SQL = _LIVE_ELEMENTS_CTE + """
+SELECT count(*) AS tracked_with_elements FROM latest_elements
 """
 
 _LAUNCH_WINDOWS_SQL = """
@@ -241,8 +290,8 @@ SELECT
 """
 
 # Payloads still on orbit per current owner. Without the decay filter the count included every
-# payload the operator ever flew (SpaceX: ~13,000 against ~11,000 tracked LEO objects), and the
-# Follow-up tile that divides it by leo_objects read "~113% of LEO".
+# payload the operator ever flew (SpaceX: ~13,000 against ~11,000 active satellites in LEO then),
+# and the Follow-up tile that divides it by leo_objects read "~113% of LEO".
 _TOP_OPERATORS_SQL = """
 SELECT o.canonical_name AS operator, count(*) AS payloads
 FROM satellite s
@@ -337,7 +386,9 @@ def _compute_congestion_heavy(db: psycopg.Connection) -> dict:
 # ---------------------------------------------------------------------------------------------
 # Latest element set per NORAD for LEO payloads, joined to identity for labels. LATERAL index-seeks
 # per NORAD (gp_elements PK (norad_id, epoch, source)) -- bounded, ~0.7s -- never a catalog-wide
-# DISTINCT ON scan. perigee_km/apogee_km are STORED generated columns.
+# DISTINCT ON scan. perigee_km/apogee_km are STORED generated columns. A payload with a recorded
+# decay is left out: its last element set can still propagate without an SGP4 error, and it then
+# showed up as a pass by an object that had re-entered long before.
 _FETCH_LEO_SQL = """
 WITH le AS (
     SELECT s.satellite_id, s.norad_id, s.canonical_name, g.epoch,
@@ -352,7 +403,7 @@ WITH le AS (
         ORDER BY epoch DESC
         LIMIT 1
     ) g ON TRUE
-    WHERE s.norad_id IS NOT NULL AND s.object_type = 'PAYLOAD'
+    WHERE s.norad_id IS NOT NULL AND s.object_type = 'PAYLOAD' AND s.decay_date IS NULL
       AND (g.perigee_km + g.apogee_km) / 2.0 < %(maxalt)s
 )
 SELECT * FROM le

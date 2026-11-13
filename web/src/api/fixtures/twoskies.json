@@ -184,7 +184,7 @@
   ],
   "n_famous": 3,
   "n_conflict": 12,
-  "note": "has_conflict = the host has a candidate with a disputed/AMBIGUOUS disposition or a cross-source attribute conflict (the ExoDossier conflict layer)."
+  "note": "has_conflict marks a host with a candidate whose sources map to two or more distinct canonical dispositions, which are the disposition conflicts that /conflicts lists. Coordinates are ICRS from the exo star table."
  },
  "congestion": {
   "catalog_objects": 69878,
@@ -3597,7 +3597,7 @@
   ],
   "caveats": [
    "TESS itself is largely immune: it observes from a high lunar-resonant orbit far above LEO, so megaconstellations do not streak its frames. The contamination risk is to GROUND-BASED follow-up -- the TFOP network and wide-field surveys that confirm TESS candidates from Earth.",
-   "Positions are ILLUSTRATIVE, not operational. The satellite element sets are ~1 week old; propagated positions carry along-track error of many kilometres (arcminutes-to-degrees on the sky). Good for 'roughly which objects cross this sky patch', not collision-grade avoidance.",
+   "Positions are ILLUSTRATIVE, not operational. The satellite element sets are refreshed from CelesTrak twice a day and from Space-Track once a day, and most have an epoch within the last day or two. Each set is propagated forward from its own epoch, so positions carry along-track error of many kilometres, which is arcminutes to degrees on the sky. They are good for roughly which objects cross this patch of sky, not for collision-grade avoidance.",
    "Only LEO payloads are propagated (the streak/interference source). Coordinate frames are approximate -- TEME treated as inertial, no precession/nutation/refraction correction."
   ],
   "note": "IAU Centre for the Protection of the Dark and Quiet Sky from Satellite Constellation Interference (IAU CPS) coordinates the community response to this issue."
@@ -3771,7 +3771,7 @@
   "elapsed_ms": 412,
   "caveats": [
    "TESS itself is largely immune: it observes from a high lunar-resonant orbit far above LEO, so megaconstellations do not streak its frames. The contamination risk is to GROUND-BASED follow-up -- the TFOP network and wide-field surveys that confirm TESS candidates from Earth.",
-   "Positions are ILLUSTRATIVE, not operational. The satellite element sets are ~1 week old; propagated positions carry along-track error of many kilometres (arcminutes-to-degrees on the sky). Good for 'roughly which objects cross this sky patch', not collision-grade avoidance.",
+   "Positions are ILLUSTRATIVE, not operational. The satellite element sets are refreshed from CelesTrak twice a day and from Space-Track once a day, and most have an epoch within the last day or two. Each set is propagated forward from its own epoch, so positions carry along-track error of many kilometres, which is arcminutes to degrees on the sky. They are good for roughly which objects cross this patch of sky, not for collision-grade avoidance.",
    "Only LEO payloads are propagated (the streak/interference source). Coordinate frames are approximate -- TEME treated as inertial, no precession/nutation/refraction correction."
   ]
  }
