@@ -28,15 +28,19 @@ export function About() {
             candidate — TIC, TOI, CTOI, KOI, Gaia DR3, HD, HIP — into one graph, then records what
             every source claims about each attribute (period, radius, disposition, host temperature,
             and more) <em>before</em> any resolution. Where the sources disagree, it says so, and it
-            shows you exactly who said what, with the publication behind each value.
+            shows you exactly who said what: the source behind every value and, for the
+            Archive&rsquo;s per-publication rows, the publication that reported it.
           </p>
           <p>
             <strong>It surfaces disagreement; it does not adjudicate or confirm.</strong> When a row
             is marked &ldquo;Resolved,&rdquo; that is the graph&rsquo;s current canonical winner under
             a precedence policy — not a claim that the other sources are wrong. Confirming a planet is
-            a telescope problem, not a software one, and we never pretend otherwise. This is Stage 1:
-            a read-only catalog + API + agent tools. AI-orchestrated dossiers that weigh the evidence
-            come later — and even then, a human adjudicates.
+            a telescope problem, not a software one, and we never pretend otherwise. Today ExoDossier
+            is a read-only catalog and API, an independent light-curve check on a fixed slice of TOIs,
+            and a tool that shows which satellites cross a candidate&rsquo;s line of sight during a
+            ground-based follow-up window. The agent tools, an MCP server, are in the open-source
+            repository. AI-orchestrated dossiers that weigh the evidence come later, and even then a
+            human adjudicates.
           </p>
         </div>
       </Panel>
